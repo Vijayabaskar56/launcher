@@ -1,0 +1,49 @@
+# launcher
+
+This project was created with [Better-T-Stack](https://github.com/AmanVarshney01/create-better-t-stack), a modern TypeScript stack that combines React Native, Expo, and more.
+
+## Features
+
+- **TypeScript** - For type safety and improved developer experience
+- **React Native** - Build mobile apps using React
+- **Expo** - Tools for React Native development
+- **Husky** - Git hooks for code quality
+- **Oxlint** - Oxlint + Oxfmt (linting & formatting)
+- **Turborepo** - Optimized monorepo build system
+
+## Getting Started
+
+First, install the dependencies:
+
+```bash
+bun install
+```
+
+Then, run the development server:
+
+```bash
+bun run dev
+```
+
+Use the Expo Go app to run the mobile application.
+
+## Git Hooks and Formatting
+
+- Initialize hooks: `bun run prepare`
+- Format and lint fix: `bun run check`
+
+## Project Structure
+
+```
+launcher/
+├── apps/
+│   ├── native/      # Mobile application (React Native, Expo)
+```
+
+## Available Scripts
+
+- `bun run dev`: Start all applications in development mode
+- `bun run build`: Build all applications
+- `bun run check-types`: Check TypeScript types across all apps
+- `bun run dev:native`: Start the React Native/Expo development server
+- `bun run check`: Run Oxlint and Oxfmt
