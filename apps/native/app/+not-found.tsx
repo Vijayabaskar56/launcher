@@ -1,66 +1,28 @@
 import { Link, Stack } from "expo-router";
 import { Text, View } from "react-native";
-import { StyleSheet } from "react-native-unistyles";
 
-import { Container } from "@/components/container";
+import { IconAccent, ICON_MAP } from "@/components/ui/icon";
 
 export default function NotFoundScreen() {
   return (
     <>
       <Stack.Screen options={{ title: "Oops!" }} />
-      <Container>
-        <View style={styles.container}>
-          <View style={styles.content}>
-            <Text style={styles.emoji}>🤔</Text>
-            <Text style={styles.title}>Page Not Found</Text>
-            <Text style={styles.description}>
-              Sorry, the page you're looking for doesn't exist.
+      <View className="flex-1 items-center justify-center p-6">
+        <View className="items-center">
+          <IconAccent name={ICON_MAP.warning} size={64} className="mb-4" />
+          <Text className="text-2xl font-bold text-foreground text-center mb-2">
+            Page Not Found
+          </Text>
+          <Text className="text-base text-muted-foreground mb-8 max-w-[280] text-center">
+            Sorry, the page you&apos;re looking for doesn&apos;t exist.
+          </Text>
+          <Link href="/" className="bg-primary/10 px-6 py-3 rounded-xl">
+            <Text className="text-base font-medium text-primary">
+              Go to Home
             </Text>
-            <Link href="/" style={styles.button}>
-              <Text style={styles.buttonText}>Go to Home</Text>
-            </Link>
-          </View>
+          </Link>
         </View>
-      </Container>
+      </View>
     </>
   );
 }
-
-const styles = StyleSheet.create((theme) => ({
-  container: {
-    flex: 1,
-    justifyContent: "center",
-    alignItems: "center",
-    padding: theme.spacing.lg,
-  },
-  content: {
-    alignItems: "center",
-  },
-  emoji: {
-    fontSize: 64,
-    marginBottom: theme.spacing.md,
-  },
-  title: {
-    fontSize: theme.fontSize["2xl"],
-    fontWeight: "bold",
-    color: theme.colors.foreground,
-    marginBottom: theme.spacing.sm,
-    textAlign: "center",
-  },
-  description: {
-    color: theme.colors.mutedForeground,
-    textAlign: "center",
-    marginBottom: theme.spacing.xl,
-    maxWidth: 280,
-  },
-  button: {
-    backgroundColor: `${theme.colors.primary}1A`, // 10% opacity
-    paddingHorizontal: theme.spacing.lg,
-    paddingVertical: theme.spacing.sm + 4,
-    borderRadius: theme.borderRadius.lg,
-  },
-  buttonText: {
-    color: theme.colors.primary,
-    fontWeight: "500",
-  },
-}));

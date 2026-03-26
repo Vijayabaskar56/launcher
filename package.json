@@ -24,8 +24,8 @@
   },
   "dependencies": {
     "@launcher/env": "workspace:*",
-    "dotenv": "catalog:",
-    "zod": "catalog:"
+    "dotenv": "^17.3.1",
+    "zod": "^4.3.6"
   },
   "devDependencies": {
     "@launcher/config": "workspace:*",
@@ -33,8 +33,8 @@
     "lint-staged": "latest",
     "oxfmt": "latest",
     "oxlint": "latest",
-    "turbo": "^2.8.12",
-    "typescript": "catalog:",
+    "turbo": "^2.8.20",
+    "typescript": "^5.9.3",
     "ultracite": "7.3.2"
   },
   "lint-staged": {

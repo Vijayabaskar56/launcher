@@ -1,21 +1,11 @@
+// eslint-disable-next-line unicorn/prefer-module, unicorn/no-anonymous-default-export
 module.exports = (api) => {
   api.cache(true);
-  const plugins = [];
-
-  plugins.push([
-    "react-native-unistyles/plugin",
-    {
-      root: "src",
-      autoProcessRoot: "app",
-      autoProcessImports: ["@/components"],
-    },
-  ]);
-
-  plugins.push("react-native-worklets/plugin");
+  const plugins = ["react-native-worklets/plugin"];
 
   return {
-    presets: ["babel-preset-expo"],
-
     plugins,
+
+    presets: ["babel-preset-expo"],
   };
 };

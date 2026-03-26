@@ -12,45 +12,44 @@ import { fetchCached } from "./fetch.js";
 
 const SCHEMA_URL = "https://api.expo.dev/v2/workflows/schema";
 
-async function fetchSchema() {
+const fetchSchema = async () => {
   const data = await fetchCached(SCHEMA_URL);
   const body = JSON.parse(data);
   return body.data;
-}
+};
 
-function createValidator(schema) {
+const createValidator = (schema) => {
   const ajv = new Ajv2020({ allErrors: true, strict: true });
   addFormats(ajv);
   return ajv.compile(schema);
-}
+};
 
-async function validateFile(validator, filePath) {
-  const content = await readFile(filePath, "utf-8");
+const validateFile = async (validator, filePath) => {
+  const content = await readFile(filePath, "utf8");
 
   let doc;
   try {
     doc = yaml.load(content);
-  } catch (e) {
-    return { valid: false, error: `YAML parse error: ${e.message}` };
+  } catch (error) {
+    return { error: `YAML parse error: ${error.message}`, valid: false };
   }
 
   const valid = validator(doc);
   if (!valid) {
-    return { valid: false, error: formatErrors(validator.errors) };
+    return { error: formatErrors(validator.errors), valid: false };
   }
 
   return { valid: true };
-}
+};
 
-function formatErrors(errors) {
-  return errors
+const formatErrors = (errors) =>
+  errors
     .map((error) => {
       const path = error.instancePath || "(root)";
       const allowed = error.params?.allowedValues?.join(", ");
       return `  ${path}: ${error.message}${allowed ? ` (allowed: ${allowed})` : ""}`;
     })
     .join("\n");
-}
 
 if (import.meta.main) {
   const args = process.argv.slice(2);

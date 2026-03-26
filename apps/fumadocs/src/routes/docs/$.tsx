@@ -13,19 +13,9 @@ import {
 } from "fumadocs-ui/layouts/docs/page";
 import { Suspense } from "react";
 
-import { useMDXComponents } from "@/components/mdx";
+import { getMDXComponents } from "@/components/mdx";
 import { baseOptions, gitConfig } from "@/lib/layout.shared";
 import { source } from "@/lib/source";
-
-export const Route = createFileRoute("/docs/$")({
-  component: Page,
-  loader: async ({ params }) => {
-    const slugs = params._splat?.split("/") ?? [];
-    const data = await serverLoader({ data: slugs });
-    await clientLoader.preload(data.path);
-    return data;
-  },
-});
 
 const serverLoader = createServerFn({
   method: "GET",
@@ -33,26 +23,29 @@ const serverLoader = createServerFn({
   .inputValidator((slugs: string[]) => slugs)
   .handler(async ({ data: slugs }) => {
     const page = source.getPage(slugs);
-    if (!page) throw notFound();
+    if (!page) {
+      throw notFound();
+    }
 
     return {
-      slugs: page.slugs,
-      path: page.path,
       pageTree: await source.serializePageTree(source.getPageTree()),
+      path: page.path,
+      slugs: page.slugs,
     };
   });
 
+const mdxComponents = getMDXComponents();
+
 const clientLoader = browserCollections.docs.createClientLoader({
-  component(
-    { toc, frontmatter, default: MDX },
-    // you can define props for the component
+  component: function DocsContent(
+    { toc, frontmatter, default: MdxContent },
     {
       markdownUrl,
       path,
     }: {
       markdownUrl: string;
       path: string;
-    },
+    }
   ) {
     return (
       <DocsPage toc={toc}>
@@ -66,20 +59,33 @@ const clientLoader = browserCollections.docs.createClientLoader({
           />
         </div>
         <DocsBody>
-          <MDX components={useMDXComponents()} />
+          <MdxContent components={mdxComponents} />
         </DocsBody>
       </DocsPage>
     );
   },
 });
 
-function Page() {
+const Page = () => {
+  // eslint-disable-next-line no-use-before-define
   const { path, pageTree, slugs } = useFumadocsLoader(Route.useLoaderData());
   const markdownUrl = `/llms.mdx/docs/${slugs.join("/")}`;
 
   return (
     <DocsLayout {...baseOptions()} tree={pageTree}>
-      <Suspense>{clientLoader.useContent(path, { markdownUrl, path })}</Suspense>
+      <Suspense>
+        {clientLoader.useContent(path, { markdownUrl, path })}
+      </Suspense>
     </DocsLayout>
   );
-}
+};
+
+export const Route = createFileRoute("/docs/$")({
+  component: Page,
+  loader: async ({ params }) => {
+    const slugs = params._splat?.split("/") ?? [];
+    const data = await serverLoader({ data: slugs });
+    await clientLoader.preload(data.path);
+    return data;
+  },
+});

@@ -1,10 +1,20 @@
 {
   "version": 1,
   "skills": {
+    "building-components": {
+      "source": "vercel/components.build",
+      "sourceType": "github",
+      "computedHash": "ca96444b70257eb3f4f4c76dfdd4a32312c835fe3c8755d2e3d75ac78d384bfd"
+    },
     "building-native-ui": {
       "source": "expo/skills",
       "sourceType": "github",
       "computedHash": "342df93f481a0dba919f372d6c7b40d2b4bf5b51dd24363aea2e5d0bae27a6fa"
+    },
+    "creating-reanimated-animations": {
+      "source": "estevg/skills",
+      "sourceType": "github",
+      "computedHash": "5406c06d9f9462e0562d419db34d75eeb0ae1e42fe34660a4a425e04acbbae91"
     },
     "expo-cicd-workflows": {
       "source": "expo/skills",
@@ -26,6 +36,31 @@
       "sourceType": "github",
       "computedHash": "6c14e4efb34a9c4759e8b959f82dec328f87dd89a022957c6737086984b9b106"
     },
+    "radon-mcp": {
+      "source": "software-mansion-labs/skills",
+      "sourceType": "github",
+      "computedHash": "aef74933f21cb992370bdb21ac99cbdc7f2da2d77e1fbbaf7fd9044f7cb41882"
+    },
+    "react-native-best-practices": {
+      "source": "software-mansion-labs/skills",
+      "sourceType": "github",
+      "computedHash": "3324872a2b2993ee1e247697934547a19377fa9dcd1dd72e735bbbf08a3e6193"
+    },
+    "react-native-unistyles-v3": {
+      "source": "jpudysz/react-native-unistyles",
+      "sourceType": "github",
+      "computedHash": "75c83b0ca99ab986087778cbb069331104b5baf8a6238d7f9f822a6a8c0ebb91"
+    },
+    "reanimated-dnd": {
+      "source": "entropyconquers/react-native-reanimated-dnd",
+      "sourceType": "github",
+      "computedHash": "bad9ca3cf7038d96a3fd1558f07742ec3e4b4f9526e907cef99dfb655017bd7b"
+    },
+    "reanimated-skia-performance": {
+      "source": "andreev-danila/skills",
+      "sourceType": "github",
+      "computedHash": "14ab8be93ebb822d4f9c6ebdce0204f0b5e3837b15b43cdb061a06973751364e"
+    },
     "turborepo": {
       "source": "vercel/turborepo",
       "sourceType": "github",
@@ -40,6 +75,26 @@
       "source": "expo/skills",
       "sourceType": "github",
       "computedHash": "939a6820e0d6ead943bb4ad93cec647815e73fbc04043401773b2138e9e13b69"
+    },
+    "vercel-composition-patterns": {
+      "source": "vercel-labs/agent-skills",
+      "sourceType": "github",
+      "computedHash": "f98931159fa9c7fed043bcd18a891a46dcf89ababa38df13a4c5b7b30dc0ce07"
+    },
+    "vercel-react-best-practices": {
+      "source": "vercel-labs/agent-skills",
+      "sourceType": "github",
+      "computedHash": "c858d2d9023e73edb4e5504868cb0e36313e58fd56af12ef888b43c5634a3c17"
+    },
+    "vercel-react-native-skills": {
+      "source": "vercel-labs/agent-skills",
+      "sourceType": "github",
+      "computedHash": "2e9088a7333666d8c2833b8ff58bd51b955501c42b4c7244f72b4cbf22dafcc4"
+    },
+    "voltra": {
+      "source": "callstackincubator/voltra",
+      "sourceType": "github",
+      "computedHash": "c43219a9d79c198ec48c463bc7ff8ed9d069085e0926419ab0acb6bdf8fc79c3"
     }
   }
 }

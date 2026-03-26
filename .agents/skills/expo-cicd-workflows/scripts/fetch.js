@@ -6,12 +6,13 @@ import { resolve } from "node:path";
 import process from "node:process";
 
 const CACHE_DIRECTORY = resolve(import.meta.dirname, ".cache");
-const DEFAULT_TTL_SECONDS = 15 * 60; // 15 minutes
+// 15 minutes
+const DEFAULT_TTL_SECONDS = 15 * 60;
 
-export async function fetchCached(url) {
+export const fetchCached = async (url) => {
   await mkdir(CACHE_DIRECTORY, { recursive: true });
 
-  const cacheFile = resolve(CACHE_DIRECTORY, hashUrl(url) + ".json");
+  const cacheFile = resolve(CACHE_DIRECTORY, `${hashUrl(url)}.json`);
   const cached = await loadCacheEntry(cacheFile);
   if (cached && cached.expires > Math.floor(Date.now() / 1000)) {
     return cached.data;
@@ -41,33 +42,32 @@ export async function fetchCached(url) {
   const data = await response.text();
   const expires = getExpires(response.headers);
 
-  await saveCacheEntry(cacheFile, { url, etag, expires, data });
+  await saveCacheEntry(cacheFile, { data, etag, expires, url });
 
   return data;
-}
+};
 
-function hashUrl(url) {
-  return createHash("sha256").update(url).digest("hex").slice(0, 16);
-}
+const hashUrl = (url) =>
+  createHash("sha256").update(url).digest("hex").slice(0, 16);
 
-async function loadCacheEntry(cacheFile) {
+const loadCacheEntry = async (cacheFile) => {
   try {
-    return JSON.parse(await readFile(cacheFile, "utf-8"));
+    return JSON.parse(await readFile(cacheFile, "utf8"));
   } catch {
     return null;
   }
-}
+};
 
-async function saveCacheEntry(cacheFile, entry) {
+const saveCacheEntry = async (cacheFile, entry) => {
   await writeFile(cacheFile, JSON.stringify(entry, null, 2));
-}
+};
 
-function getExpires(headers) {
+const getExpires = (headers) => {
   const now = Math.floor(Date.now() / 1000);
 
   // Prefer Cache-Control: max-age
   const maxAgeSeconds = parseMaxAge(headers.get("cache-control"));
-  if (maxAgeSeconds != null) {
+  if (maxAgeSeconds !== null && maxAgeSeconds !== undefined) {
     return now + maxAgeSeconds;
   }
 
@@ -82,17 +82,18 @@ function getExpires(headers) {
 
   // Default TTL
   return now + DEFAULT_TTL_SECONDS;
-}
+};
 
-function parseMaxAge(cacheControl) {
+const parseMaxAge = (cacheControl) => {
   if (!cacheControl) {
     return null;
   }
   const match = cacheControl.match(/max-age=(\d+)/i);
-  return match ? parseInt(match[1], 10) : null;
-}
+  return match ? Number.parseInt(match[1], 10) : null;
+};
 
 if (import.meta.main) {
+  // eslint-disable-next-line prefer-destructuring
   const url = process.argv[2];
 
   if (!url || url === "--help" || url === "-h") {
