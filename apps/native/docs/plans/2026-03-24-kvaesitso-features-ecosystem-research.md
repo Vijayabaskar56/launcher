@@ -12,13 +12,13 @@
 | ------------------------ | ----- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | **Done**                 | 66    | Search (9 providers incl. currency + website URL), filter bar, ranking, quick actions (call, SMS, email, URL, create contact, set alarm, start timer, create calendar event), best match launch on Enter, backup + theme import/export, locale, weather (Met.no + OpenWeatherMap), homescreen (clock, battery, charging, system bars), gestures (6 configurable, 10 actions, directional panels, haptics), accessibility actions (lock/notifications/quick settings/recents/power menu), Material You dynamic colors, notification badges, string normalization, custom labels in search, item visibility levels |
 | **Partial / JS DIY**     | 2     | Tags for search items, i18n                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
-| **Custom Native Module** | 5     | Media session, icon packs, adaptive icons, work profile, app shortcuts                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           |
+| **Custom Native Module** | 4     | Media session, icon packs, adaptive icons, app shortcuts                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           |
 
 **Key insight:** Of the original 3 planned Expo modules, 1 is fully complete and 1 is partially done:
 
 1. **~~AccessibilityService module~~** — **DONE** (built as `react-native-accessibility-actions` Nitro module). Lock screen, notifications, quick settings, recents, power menu all working.
 2. **NotificationListener module** — **PARTIALLY DONE** (`expo-android-notification-listener-service` installed, badge counts working). Still needs: media session reading, notification actions.
-3. **Launcher module** — app list with icons, icon packs, adaptive icons, work profile, app uninstall (5 features → 1 module). **NOT STARTED**.
+3. **Launcher module** — icon packs, adaptive icons, themed icons, app shortcuts. **NOT STARTED**. Work profile dropped from scope.
 
 ---
 
@@ -180,44 +180,36 @@
 
 ## Custom Native Modules to Build (3 Expo Modules)
 
-### Module 1: `expo-launcher-service`
+### Module 1: `launcher-service` (Nitro module)
 
-**Covers:** App list, app icons, adaptive icons, icon packs, app shortcuts, work profile, app uninstall
+**Covers:** Adaptive icons, icon packs, app shortcuts, themed icons
 
 **Android APIs:**
 
-- `PackageManager` — list apps, get icons, query icon packs
+- `PackageManager` — query icon packs
 - `AdaptiveIconDrawable` — extract foreground/background layers
-- `LauncherApps` — work profile, themed icons
+- `LauncherApps` — themed icons
 - `ShortcutManager` — static/dynamic shortcuts
-- `CrossProfileApps` — work profile interaction
 
 **Estimated effort:** Large (200-300 lines Kotlin)
+**Note:** Work profile (`CrossProfileApps`) dropped from scope.
 
-### Module 2: `expo-accessibility-actions`
+### ~~Module 2: `expo-accessibility-actions`~~ — DONE
 
-**Covers:** Lock screen, open notifications, open quick settings, open recents, power menu
+Built as `react-native-accessibility-actions` Nitro module in `packages/react-native-accessibility-actions/`.
+~80 lines Kotlin. Exposes 7 methods via `HybridAccessibilityActions`.
 
-**Android APIs:**
+### Module 3: `notification-bridge` (Nitro module)
 
-- `AccessibilityService.performGlobalAction()`
-- `DevicePolicyManager.lockNow()`
-
-**Estimated effort:** Small (50-80 lines Kotlin)
-**User requirement:** Must enable accessibility service in Android Settings
-
-### Module 3: `expo-notification-bridge`
-
-**Covers:** Notification listener, badge counts, media session reading, notification actions
+**Covers:** Media session reading, notification actions (badge counts already done via `expo-android-notification-listener-service`)
 
 **Android APIs:**
 
-- `NotificationListenerService`
-- `MediaSessionManager`
-- `StatusBarNotification`
+- `MediaSessionManager` — read active media sessions
+- `StatusBarNotification` — execute notification actions
 
 **Estimated effort:** Medium (100-150 lines Kotlin)
-**User requirement:** Must grant notification access in Android Settings
+**User requirement:** Notification access already granted for badge counts
 
 ---
 
@@ -231,22 +223,23 @@ All available-package features are implemented: `expo-battery`, `expo-contacts`,
 
 Done: Weather API (Met.no), Wikipedia search, calculator, unit converter, icon shape masking, clock widgets (digital + analog), backup/restore, search quick actions (call, SMS, email, URL, create contact, set alarm, create calendar event), best match launch on Enter, gesture system with directional panels.
 
-### ~~Phase 3: Remaining JS DIY features~~ — MOSTLY COMPLETE
+### ~~Phase 3: Remaining JS DIY features~~ — COMPLETE
 
-Done: Currency conversion, website URL lookup, custom labels in search, item visibility levels, theme import/export, string normalization, OpenWeatherMap provider, start timer action.
+Done: Currency conversion, website URL lookup, custom labels in search, item visibility levels, hidden items toggle with unhide modal, theme import/export, string normalization, OpenWeatherMap provider, start timer action.
 
-Remaining: Tags for search items, i18n (large effort). Nextcloud/Owncloud and work profile deprioritized (not planned).
+Remaining: Tags for search items (medium), i18n (large effort).
 
 ### Phase 4: Custom native modules
 
-Build the remaining 2 modules:
+Build the remaining modules as Nitro modules (same pattern as `react-native-accessibility-actions`):
 
 1. ~~`expo-accessibility-actions`~~ — **DONE** (built as `react-native-accessibility-actions` Nitro module)
-2. `expo-notification-bridge` — Extend notification listener with media session reading + notification actions
-3. `expo-launcher-service` — Icon packs, adaptive icons, themed icons, work profile, app shortcuts (largest)
+2. `notification-bridge` — Extend notification listener with media session reading + notification actions (~100-150 lines Kotlin)
+3. `launcher-service` — Icon packs, adaptive icons, themed icons, app shortcuts (~200-300 lines Kotlin)
 
-### Deprioritize
+### Not Planned
 
-- Smartspacer integration (niche Android feature)
-- Full ICU transliteration (edge case)
-- Work profile support (complex, low user demand initially)
+- Work profile support — deprioritized (complex, low user demand)
+- Nextcloud/Owncloud integration — deprioritized
+- Smartspacer integration — niche Android feature
+- Full ICU transliteration — edge case
