@@ -1,4 +1,5 @@
 import type { InstalledApp } from "@/context/app-list";
+import type { AppVisibility } from "@/context/drawer-metadata";
 
 import type { IconName } from "../ui/icon";
 
@@ -10,6 +11,7 @@ export interface DrawerApp extends InstalledApp {
   isPinned: boolean;
   pinnedOrder?: number;
   tagIds: string[];
+  visibility: AppVisibility;
 }
 
 export interface DrawerActionMenuState {
@@ -26,6 +28,7 @@ export interface DrawerEditorDraft {
   alias: string;
   isPinned: boolean;
   tagIds: string[];
+  visibility: AppVisibility;
 }
 
 export type DrawerEditorFocusMode = "rename" | "tags";

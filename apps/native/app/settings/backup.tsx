@@ -10,7 +10,7 @@ import { PreferenceCategory } from "@/components/settings/preference-category";
 import { SettingsContext } from "@/context/settings";
 import { useThemeOverrides } from "@/context/theme-overrides";
 import { getSettings } from "@/lib/storage";
-import type { LauncherSettingsData } from "@/types/settings";
+import type { LauncherSettingsData, ThemeSettings } from "@/types/settings";
 
 interface BackupActionProps {
   icon: keyof typeof MaterialIcons.glyphMap;
@@ -92,6 +92,11 @@ const buildFileName = (): string => {
   return `launcher-backup-${date}.json`;
 };
 
+const buildThemeFileName = (): string => {
+  const [date] = new Date().toISOString().split("T");
+  return `launcher-theme-${date}.json`;
+};
+
 const buildExportPayload = (): string => {
   const settings = getSettings();
   const payload = {
@@ -101,6 +106,34 @@ const buildExportPayload = (): string => {
     settings,
   };
   return JSON.stringify(payload, null, 2);
+};
+
+const buildThemeExportPayload = (): string => {
+  const settings = getSettings();
+  const payload = {
+    _exportedAt: new Date().toISOString(),
+    _format: "launcher-theme",
+    _version: 1,
+    theme: settings.appearance,
+  };
+  return JSON.stringify(payload, null, 2);
+};
+
+const THEME_SETTINGS_KEYS: readonly (keyof ThemeSettings)[] = [
+  "colorScheme",
+  "themePreset",
+  "accentColor",
+  "fontFamily",
+  "cornerRadius",
+  "transparency",
+];
+
+const validateThemeShape = (theme: unknown): theme is ThemeSettings => {
+  if (typeof theme !== "object" || theme === null) {
+    return false;
+  }
+  const obj = theme as Record<string, unknown>;
+  return THEME_SETTINGS_KEYS.every((key) => key in obj);
 };
 
 const validateImport = (
@@ -117,21 +150,56 @@ const validateImport = (
   );
 };
 
+const validateThemeImport = (
+  data: unknown
+): data is { theme: ThemeSettings } => {
+  if (typeof data !== "object" || data === null) {
+    return false;
+  }
+  const obj = data as Record<string, unknown>;
+  return obj._format === "launcher-theme" && validateThemeShape(obj.theme);
+};
+
+const pickJsonFile = async (): Promise<string | null> => {
+  const result = await DocumentPicker.getDocumentAsync({
+    copyToCacheDirectory: true,
+    type: "application/json",
+  });
+
+  if (result.canceled || result.assets.length === 0) {
+    return null;
+  }
+
+  const [asset] = result.assets;
+  const file = new File(asset.uri);
+  return file.text();
+};
+
+const shareJsonFile = async (
+  json: string,
+  fileName: string,
+  dialogTitle: string
+): Promise<void> => {
+  const file = new File(Paths.cache, fileName);
+  file.write(json);
+  await Sharing.shareAsync(file.uri, {
+    UTI: "public.json",
+    dialogTitle,
+    mimeType: "application/json",
+  });
+};
+
 const BackupSettings = () => {
   const settingsCtx = use(SettingsContext);
   const [busy, setBusy] = useState(false);
+
+  // --- Full settings export/import ---
 
   const handleExport = useCallback(async () => {
     setBusy(true);
     try {
       const json = buildExportPayload();
-      const file = new File(Paths.cache, buildFileName());
-      file.write(json);
-      await Sharing.shareAsync(file.uri, {
-        UTI: "public.json",
-        dialogTitle: "Export Launcher Settings",
-        mimeType: "application/json",
-      });
+      await shareJsonFile(json, buildFileName(), "Export Launcher Settings");
     } catch (error) {
       Alert.alert(
         "Export Failed",
@@ -145,18 +213,10 @@ const BackupSettings = () => {
   const handleImport = useCallback(async () => {
     setBusy(true);
     try {
-      const result = await DocumentPicker.getDocumentAsync({
-        copyToCacheDirectory: true,
-        type: "application/json",
-      });
-
-      if (result.canceled || result.assets.length === 0) {
+      const content = await pickJsonFile();
+      if (!content) {
         return;
       }
-
-      const [asset] = result.assets;
-      const file = new File(asset.uri);
-      const content = await file.text();
 
       const parsed: unknown = JSON.parse(content);
 
@@ -196,6 +256,68 @@ const BackupSettings = () => {
     }
   }, [settingsCtx]);
 
+  // --- Theme-only export/import ---
+
+  const handleThemeExport = useCallback(async () => {
+    setBusy(true);
+    try {
+      const json = buildThemeExportPayload();
+      await shareJsonFile(json, buildThemeFileName(), "Export Launcher Theme");
+    } catch (error) {
+      Alert.alert(
+        "Export Failed",
+        error instanceof Error ? error.message : "Unknown error"
+      );
+    } finally {
+      setBusy(false);
+    }
+  }, []);
+
+  const handleThemeImport = useCallback(async () => {
+    setBusy(true);
+    try {
+      const content = await pickJsonFile();
+      if (!content) {
+        return;
+      }
+
+      const parsed: unknown = JSON.parse(content);
+
+      if (!validateThemeImport(parsed)) {
+        Alert.alert(
+          "Invalid File",
+          "This file doesn't appear to be a valid launcher theme file."
+        );
+        return;
+      }
+
+      Alert.alert(
+        "Apply Theme?",
+        "This will overwrite your current appearance settings (color scheme, accent color, font, corner radius, and transparency).",
+        [
+          { style: "cancel", text: "Cancel" },
+          {
+            onPress: () => {
+              settingsCtx?.actions.updateAppearance(parsed.theme);
+              Alert.alert("Applied", "Theme has been applied successfully.");
+            },
+            style: "destructive",
+            text: "Apply",
+          },
+        ]
+      );
+    } catch (error) {
+      Alert.alert(
+        "Import Failed",
+        error instanceof Error ? error.message : "Unknown error"
+      );
+    } finally {
+      setBusy(false);
+    }
+  }, [settingsCtx]);
+
+  // --- Reset ---
+
   const handleResetAll = useCallback(() => {
     Alert.alert(
       "Reset All Settings?",
@@ -224,20 +346,40 @@ const BackupSettings = () => {
       contentContainerStyle={{ gap: 20, paddingBottom: 40, paddingTop: 8 }}
     >
       <PreferenceCategory
-        title="Settings Transfer"
-        description="Export or import your launcher configuration as a JSON file"
+        title="Theme Transfer"
+        description="Share your theme with others or apply a theme from a file"
+      >
+        <BackupAction
+          icon="color-lens"
+          title="Export Theme"
+          description="Save appearance settings to a shareable JSON file"
+          onPress={handleThemeExport}
+          disabled={busy}
+        />
+        <BackupAction
+          icon="format-paint"
+          title="Import Theme"
+          description="Apply appearance settings from a theme file"
+          onPress={handleThemeImport}
+          disabled={busy}
+        />
+      </PreferenceCategory>
+
+      <PreferenceCategory
+        title="Full Settings Transfer"
+        description="Export or import your entire launcher configuration"
       >
         <BackupAction
           icon="upload"
-          title="Export Settings"
+          title="Export All Settings"
           description="Save all settings to a shareable JSON file"
           onPress={handleExport}
           disabled={busy}
         />
         <BackupAction
           icon="download"
-          title="Import Settings"
-          description="Restore settings from a previously exported file"
+          title="Import All Settings"
+          description="Restore all settings from a previously exported file"
           onPress={handleImport}
           disabled={busy}
         />

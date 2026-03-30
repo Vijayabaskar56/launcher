@@ -1,3 +1,4 @@
+import { MaterialIcons } from "@expo/vector-icons";
 import { Stack, useLocalSearchParams } from "expo-router";
 import { useThemeColor } from "heroui-native";
 import { memo, use, useCallback } from "react";
@@ -5,12 +6,19 @@ import { Pressable, ScrollView, Text, View } from "react-native";
 
 import { PreferenceCategory } from "@/components/settings/preference-category";
 import { SettingsContext } from "@/context/settings";
-import { ACCENT_COLORS, THEME_PRESETS } from "@/types/settings";
+import { useMaterialYouColor } from "@/hooks/use-material-you-color";
+import {
+  ACCENT_COLORS,
+  SYSTEM_ACCENT_VALUE,
+  THEME_PRESETS,
+} from "@/types/settings";
 
 interface AccentSwatchProps {
   color: string;
   name: string;
   isSelected: boolean;
+  /** Resolved display color for system swatches */
+  displayColor?: string;
   onSelect: (color: string) => void;
 }
 
@@ -18,9 +26,12 @@ const AccentSwatch = memo(function AccentSwatch({
   color,
   name,
   isSelected,
+  displayColor,
   onSelect,
 }: AccentSwatchProps) {
   const [fg, muted] = useThemeColor(["foreground", "muted"] as const);
+  const isSystem = color === SYSTEM_ACCENT_VALUE;
+  const swatchColor = displayColor ?? color;
 
   const handlePress = useCallback(() => {
     onSelect(color);
@@ -45,16 +56,21 @@ const AccentSwatch = memo(function AccentSwatch({
     >
       <View
         style={{
-          backgroundColor: color,
+          alignItems: "center",
+          backgroundColor: swatchColor,
           borderColor: isSelected ? fg : "transparent",
           borderCurve: "continuous",
           borderRadius: 22,
           borderWidth: isSelected ? 3 : 0,
           height: 44,
+          justifyContent: "center",
           width: 44,
         }}
       >
-        {isSelected ? null : (
+        {isSystem && (
+          <MaterialIcons name="auto-awesome" size={20} color="#ffffff" />
+        )}
+        {!isSystem && !isSelected && (
           <View
             style={{
               borderColor: "rgba(255, 255, 255, 0.15)",
@@ -85,6 +101,7 @@ const ColorSchemeDetail = () => {
   const { id } = useLocalSearchParams<{ id: string }>();
   const settings = use(SettingsContext);
   const muted = useThemeColor("muted");
+  const materialYouColor = useMaterialYouColor();
 
   const handleSelectAccent = useCallback(
     (color: string) => {
@@ -128,6 +145,11 @@ const ColorSchemeDetail = () => {
                 name={accent.name}
                 isSelected={
                   currentAccent.toLowerCase() === accent.value.toLowerCase()
+                }
+                displayColor={
+                  accent.value === SYSTEM_ACCENT_VALUE
+                    ? materialYouColor
+                    : undefined
                 }
                 onSelect={handleSelectAccent}
               />

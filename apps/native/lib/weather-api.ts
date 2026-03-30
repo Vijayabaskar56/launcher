@@ -143,6 +143,86 @@ const fetchMetNo = async (
   };
 };
 
+// --- OpenWeatherMap (requires API key) ---
+
+interface OWMWeatherEntry {
+  id: number;
+  main: string;
+  description: string;
+}
+
+interface OWMResponse {
+  main: {
+    temp: number;
+    temp_min: number;
+    temp_max: number;
+  };
+  weather: OWMWeatherEntry[];
+  name: string;
+}
+
+const mapOWMIcon = (weatherId: number): WeatherIcon => {
+  if (weatherId >= 200 && weatherId < 300) {
+    return "thunderstorm";
+  }
+  if (weatherId >= 300 && weatherId < 400) {
+    return "rain";
+  }
+  if (weatherId >= 500 && weatherId < 600) {
+    return "rain";
+  }
+  if (weatherId >= 600 && weatherId < 700) {
+    return "snow";
+  }
+  if (weatherId >= 700 && weatherId < 800) {
+    return "fog";
+  }
+  if (weatherId === 800) {
+    return "sunny";
+  }
+  if (weatherId === 801 || weatherId === 802) {
+    return "partly-cloudy";
+  }
+  return "cloudy";
+};
+
+const mapOWMCondition = (main: string): string => {
+  const mapping: Record<string, string> = {
+    Clear: "Clear",
+    Clouds: "Cloudy",
+    Drizzle: "Drizzle",
+    Rain: "Rain",
+    Snow: "Snow",
+    Thunderstorm: "Thunderstorm",
+  };
+  return mapping[main] ?? main;
+};
+
+const fetchOpenWeatherMap = async (
+  lat: number,
+  lon: number,
+  apiKey: string
+): Promise<Omit<WeatherData, "location">> => {
+  const res = await fetch(
+    `https://api.openweathermap.org/data/2.5/weather?lat=${lat}&lon=${lon}&appid=${apiKey}&units=metric`
+  );
+
+  if (!res.ok) {
+    throw new Error(`OpenWeatherMap API error: ${res.status}`);
+  }
+
+  const data = (await res.json()) as OWMResponse;
+  const [weather] = data.weather;
+
+  return {
+    condition: mapOWMCondition(weather.main),
+    icon: mapOWMIcon(weather.id),
+    temperature: Math.round(data.main.temp),
+    temperatureHigh: Math.round(data.main.temp_max),
+    temperatureLow: Math.round(data.main.temp_min),
+  };
+};
+
 // --- Geocoding (reverse lookup via Nominatim) ---
 
 interface NominatimResult {
@@ -190,15 +270,24 @@ export const fetchWeather = async (
   provider: WeatherProvider,
   lat: number,
   lon: number,
-  locationName?: string
+  locationName?: string,
+  apiKey?: string
 ): Promise<WeatherData | null> => {
   if (provider === "none") {
     return null;
   }
 
-  // Met.no is the only fully implemented provider (no API key needed)
-  // OpenWeatherMap falls through to Met.no for now until an API key flow is added
-  const weather = await fetchMetNo(lat, lon);
+  let weather: Omit<WeatherData, "location">;
+
+  if (provider === "openweathermap") {
+    if (!apiKey) {
+      throw new Error("OpenWeatherMap requires an API key");
+    }
+    weather = await fetchOpenWeatherMap(lat, lon, apiKey);
+  } else {
+    weather = await fetchMetNo(lat, lon);
+  }
+
   const location = locationName ?? (await reverseGeocode(lat, lon));
 
   return { ...weather, location };

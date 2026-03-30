@@ -261,7 +261,7 @@ const SettingsIndex = () => {
           icon="cloud-upload"
           iconBg="#14B8A6"
           title="Backup"
-          summary="Import/export settings"
+          summary="Import/export theme and settings"
           onPress={handleBackup}
         />
         <SettingsItem

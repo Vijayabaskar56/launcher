@@ -45,11 +45,13 @@ const WeatherWidget = function WeatherWidget({
     integrations: {
       autoLocation: true,
       manualLocation: "",
+      openWeatherMapApiKey: "",
       weatherProvider: "met-no" as const,
     },
   };
 
   const { data, isLoading } = useWeather({
+    apiKey: integrations.openWeatherMapApiKey,
     autoLocation: integrations.autoLocation,
     manualLocation: integrations.manualLocation,
     provider: integrations.weatherProvider,

@@ -1,0 +1,4 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="accessibility_service_description">Enables launcher gesture actions like locking the screen, opening notifications, quick settings, recent apps, and the power menu.</string>
+</resources>

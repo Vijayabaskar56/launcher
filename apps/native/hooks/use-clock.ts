@@ -6,7 +6,10 @@ import {
 } from "react-native-reanimated";
 
 // Worklet-safe time formatting helpers
-const padTwo = (n: number): string => (n < 10 ? `0${n}` : `${n}`);
+function padTwo(n: number): string {
+  "worklet";
+  return n < 10 ? `0${n}` : `${n}`;
+}
 
 const formatTimeWorklet = (ts: number, showSeconds: boolean): string => {
   "worklet";

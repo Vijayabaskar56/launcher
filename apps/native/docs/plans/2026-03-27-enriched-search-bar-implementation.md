@@ -29,16 +29,18 @@
 ### Product Decisions Locked
 
 - **4 trigger indicators:** `@` (people), `#` (filters), `:` (emojis), `/` (commands)
-- **@ People picker:** Shows contacts from `expo-contacts` (if granted) + mock/hardcoded names as fallback
-- **# Filter picker:** Maps to search filter categories (Apps, Contacts, Calendar, Tools, Web) — selecting one activates that filter
-- **: Emoji picker:** Common emoji shortcodes (`:smile:`, `:fire:`, `:heart:`, etc.) — inserts emoji character
-- **/ Commands:** Launcher commands (`/search`, `/settings`, `/clear`, `/weather`, `/calculator`) — executes action on select
-- **Visual styling:** `@mentions` in accent color, `#filters` in green, `:emojis:` render as emoji characters, `/commands` in blue
-- **Plain text extraction:** For search, use `ref.current.getPlainText()` to feed into `useSearch()` hook — strips mention markup, keeps display text
-- **Submit behavior:** `submitBehavior: 'submit'` — pressing Enter/Go launches first search result or executes command
+- **Input ↔ search bridge:** Hybrid — `onChangeText` mirrors plain text into React state for search, enriched input owns rich content. Clear uses ref + state reset.
+- **Trigger tokens stripped from search:** Mention text is NOT sent to search providers. Only non-trigger plain text feeds into `useSearch()`. Each trigger has its own side effect.
+- **@ People picker:** Shows contacts (if granted) + mock names as fallback. Selecting `@John` activates contacts filter + searches "John". Pressing Enter with an `@mention` triggers call to primary number via default dialer.
+- **# Filter picker:** Selecting `#Contacts` inserts a green-styled mention that stays visible in input. Activates that search filter. Delete the mention to deactivate. Multiple `#filters` supported (e.g., `#Contacts #Tools query`).
+- **: Emoji picker:** `:shortcode` is replaced with the emoji character as plain text. No mention wrapping — just a character swap.
+- **/ Commands:** Selecting a command executes it and clears the entire input.
+- **Visual styling:** `@mentions` in accent color, `#filters` in green, `/commands` in blue. Emojis render as plain characters.
+- **Submit behavior:** `submitBehavior: 'submit'` — pressing Enter/Go launches first search result, or if `@mention` is active, calls primary number.
 - **No rich text toolbar:** This is a search bar, not an editor. No bold/italic/underline buttons.
-- **Suggestion popup:** Bottom sheet or floating popup above the input, matching the app's dark theme
-- **Search still works normally:** Typing plain text (no triggers) still does multi-provider search as before
+- **Suggestion popup:** Floating between search bar and filter bar, pushing search bar up. Max 5 items, no scroll. Dark themed.
+- **Search still works normally:** Typing plain text (no triggers) still does multi-provider search as before.
+- **No fallback:** No feature flag. Install, rebuild, ship.
 
 ---
 
@@ -265,17 +267,22 @@ interface UseEnrichedSearchResult {
   // Selection handler
   onSelectSuggestion: (suggestion: Suggestion) => void;
 
-  // Plain text for search
-  plainText: string;
+  // Plain text for search (trigger tokens stripped)
+  searchText: string;
   onChangeText: (event: { text: string }) => void;
 }
 ```
 
 - Manages which trigger is active (`@`, `#`, `:`, `/` or null)
 - Routes to the appropriate suggestion hook based on active trigger
-- `onSelectSuggestion` calls `ref.current.setMention()` for @/# mentions, inserts emoji character for `:`, executes action for `/`
-- Extracts plain text from `onChangeText` events to feed into the existing `useSearch()` hook
-- When `#filter` is selected, also toggles the search filter via `searchResults.toggleFilter()`
+- Max 5 suggestions returned regardless of source
+- `onSelectSuggestion` behavior per trigger:
+  - `@`: calls `ref.current.setMention('@', '@Name', { id, type: 'person' })` + activates contacts filter + searches the name. On Enter with active `@mention`, calls primary phone number.
+  - `#`: calls `ref.current.setMention('#', '#FilterName', { filterKey })` + toggles the search filter. Mention stays visible. Delete to deactivate.
+  - `:`: replaces `:shortcode` with emoji character as plain text (no mention span)
+  - `/`: executes command action + clears entire input via `ref.current.setValue('')`
+- `searchText` extracts plain text from `onChangeText` events and strips trigger tokens (`@Name`, `#Filter` removed, only free text kept for search providers)
+- `onChangeText` also handles the `@mention` → contact search side effect
 
 **Step 2: Commit**
 
@@ -318,16 +325,23 @@ Key changes:
 
 **Step 2: Update SearchBarContext**
 
-The context needs to change since the input is now uncontrolled:
+The context changes to hybrid controlled/uncontrolled:
 
-- Remove `query` from state (no longer in React state)
-- Add `plainText` (extracted from `onChangeText` events) for search
-- Add `enrichedRef` for imperative access
-- `setQuery` now calls `ref.current.setValue()`
+- Keep `query` in state — but rename to `searchText` (the trigger-stripped plain text for search)
+- Add `enrichedRef: RefObject<EnrichedTextInputInstance>` for imperative access
+- `onChangeText` from enriched input → strip trigger tokens → update `searchText` state
+- `deactivate()` calls `ref.current.setValue('')` AND `setSearchText('')`
+- `setQuery(text)` calls `ref.current.setValue(text)` for programmatic text setting
+- Expose `isActive`, `searchText`, `enrichedRef` to consumers
 
 **Step 3: Mount suggestion popup**
 
-Render `SuggestionPopup` inside the `SearchBar.Frame`, positioned above the input, only when `activeTrigger !== null`.
+Render `SuggestionPopup` between the search bar and filter bar when `activeTrigger !== null`:
+
+- Popup pushes search bar up by its height (~5 items × 44px = 220px max)
+- Filter bar stays in its keyboard-docked position
+- Search bar bottom offset = keyboardHeight + filterBarHeight + popupHeight
+- Popup animates in with FadeIn, out with FadeOut
 
 **Step 4: Commit**
 

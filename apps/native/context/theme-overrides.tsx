@@ -1,7 +1,9 @@
 import { createContext, use, useMemo } from "react";
 
 import { SettingsContext } from "@/context/settings";
+import { useMaterialYouColor } from "@/hooks/use-material-you-color";
 import type { FontFamily } from "@/types/settings";
+import { SYSTEM_ACCENT_VALUE } from "@/types/settings";
 
 interface ThemeOverridesValue {
   accentColor: string;
@@ -45,11 +47,16 @@ export const ThemeOverridesProvider = ({
   children: React.ReactNode;
 }) => {
   const settings = use(SettingsContext);
+  const materialYouColor = useMaterialYouColor();
 
   const value = useMemo<ThemeOverridesValue>(() => {
     const appearance = settings?.state.appearance;
     const cornerRadius = appearance?.cornerRadius ?? 12;
-    const accentColor = appearance?.accentColor ?? "#6366f1";
+    const rawAccentColor = appearance?.accentColor ?? "#6366f1";
+    const accentColor =
+      rawAccentColor === SYSTEM_ACCENT_VALUE
+        ? materialYouColor
+        : rawAccentColor;
     const transparency = appearance?.transparency ?? 0.8;
     const fontFamilyId = (appearance?.fontFamily ?? "system") as FontFamily;
 
@@ -63,7 +70,7 @@ export const ThemeOverridesProvider = ({
       smallRadius: Math.max(4, Math.round(cornerRadius * 0.625)),
       transparency,
     };
-  }, [settings?.state.appearance]);
+  }, [settings?.state.appearance, materialYouColor]);
 
   return (
     <ThemeOverridesContext value={value}>{children}</ThemeOverridesContext>

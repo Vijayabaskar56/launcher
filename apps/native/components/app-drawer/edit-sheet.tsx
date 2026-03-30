@@ -191,6 +191,9 @@ export const AppDrawerEditSheet = ({
   const bottomSheetRef = useRef<BottomSheet>(null);
   const [alias, setAlias] = useState("");
   const [isPinned, setIsPinned] = useState(false);
+  const [visibility, setVisibility] = useState<
+    "default" | "search-only" | "hidden"
+  >("default");
   const [newTagLabel, setNewTagLabel] = useState("");
   const [selectedTagIds, setSelectedTagIds] = useState<string[]>([]);
 
@@ -203,6 +206,7 @@ export const AppDrawerEditSheet = ({
 
     setAlias(app.alias ?? app.displayLabel);
     setIsPinned(app.isPinned);
+    setVisibility(app.visibility ?? "default");
     setNewTagLabel("");
     setSelectedTagIds(app.tagIds);
   }, [app]);
@@ -249,8 +253,9 @@ export const AppDrawerEditSheet = ({
       alias,
       isPinned,
       tagIds: selectedTagIds,
+      visibility,
     });
-  }, [onSave, alias, isPinned, selectedTagIds]);
+  }, [onSave, alias, isPinned, selectedTagIds, visibility]);
 
   const handleSetPinnedFalse = useCallback(() => {
     setIsPinned(false);
@@ -258,6 +263,18 @@ export const AppDrawerEditSheet = ({
 
   const handleSetPinnedTrue = useCallback(() => {
     setIsPinned(true);
+  }, []);
+
+  const handleSetVisibilityDefault = useCallback(() => {
+    setVisibility("default");
+  }, []);
+
+  const handleSetVisibilitySearchOnly = useCallback(() => {
+    setVisibility("search-only");
+  }, []);
+
+  const handleSetVisibilityHidden = useCallback(() => {
+    setVisibility("hidden");
   }, []);
 
   const handleDeselectTag = useCallback((tagId: string) => {
@@ -471,6 +488,79 @@ export const AppDrawerEditSheet = ({
                 Pinned + launcher
               </Text>
             </View>
+          </View>
+        </View>
+
+        <View className="bg-card border border-border rounded-2xl gap-3 p-4">
+          <View className="gap-1">
+            <Text className="text-sm font-bold uppercase text-foreground tracking-wide">
+              Visibility
+            </Text>
+            <Text className="text-xs text-muted-foreground">
+              Control where this app appears
+            </Text>
+          </View>
+          <View className="gap-1.5">
+            <Pressable
+              className={`flex-row items-center gap-3 rounded-xl px-3.5 min-h-[48px] border ${
+                visibility === "default"
+                  ? "bg-primary/10 border-primary"
+                  : "bg-secondary border-border"
+              }`}
+              onPress={handleSetVisibilityDefault}
+            >
+              <Text className="text-base text-foreground">
+                {visibility === "default" ? "\u25CF" : "\u25CB"}
+              </Text>
+              <View className="flex-1">
+                <Text className="text-sm font-semibold text-foreground">
+                  Default
+                </Text>
+                <Text className="text-xs text-muted-foreground">
+                  Shows in drawer and search
+                </Text>
+              </View>
+            </Pressable>
+            <Pressable
+              className={`flex-row items-center gap-3 rounded-xl px-3.5 min-h-[48px] border ${
+                visibility === "search-only"
+                  ? "bg-primary/10 border-primary"
+                  : "bg-secondary border-border"
+              }`}
+              onPress={handleSetVisibilitySearchOnly}
+            >
+              <Text className="text-base text-foreground">
+                {visibility === "search-only" ? "\u25CF" : "\u25CB"}
+              </Text>
+              <View className="flex-1">
+                <Text className="text-sm font-semibold text-foreground">
+                  Search only
+                </Text>
+                <Text className="text-xs text-muted-foreground">
+                  Hidden from drawer, appears in search
+                </Text>
+              </View>
+            </Pressable>
+            <Pressable
+              className={`flex-row items-center gap-3 rounded-xl px-3.5 min-h-[48px] border ${
+                visibility === "hidden"
+                  ? "bg-primary/10 border-primary"
+                  : "bg-secondary border-border"
+              }`}
+              onPress={handleSetVisibilityHidden}
+            >
+              <Text className="text-base text-foreground">
+                {visibility === "hidden" ? "\u25CF" : "\u25CB"}
+              </Text>
+              <View className="flex-1">
+                <Text className="text-sm font-semibold text-foreground">
+                  Hidden
+                </Text>
+                <Text className="text-xs text-muted-foreground">
+                  Hidden from drawer and search
+                </Text>
+              </View>
+            </Pressable>
           </View>
         </View>
 

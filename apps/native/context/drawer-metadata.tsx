@@ -17,12 +17,15 @@ const sortedCopy = (arr: string[]): string[] => {
 
 const STORAGE_KEY = "drawer-metadata";
 
+export type AppVisibility = "default" | "search-only" | "hidden";
+
 export interface DrawerAppMetadata {
   packageName: string;
   alias?: string;
   isPinned: boolean;
   pinnedOrder?: number;
   tagIds: string[];
+  visibility: AppVisibility;
 }
 
 export interface DrawerTag {
@@ -47,6 +50,7 @@ interface DrawerMetadataContextValue {
     setAlias: (packageName: string, alias: string) => void;
     setAppTags: (packageName: string, tagIds: string[]) => void;
     setPinned: (packageName: string, isPinned: boolean) => void;
+    setVisibility: (packageName: string, visibility: AppVisibility) => void;
   };
 }
 
@@ -91,10 +95,17 @@ const sortPinnedMetadata = (apps: Record<string, DrawerAppMetadata>) =>
     }
   );
 
+const VALID_VISIBILITIES = new Set<AppVisibility>([
+  "default",
+  "search-only",
+  "hidden",
+]);
+
 const getDefaultMetadata = (packageName: string): DrawerAppMetadata => ({
   isPinned: false,
   packageName,
   tagIds: [],
+  visibility: "default",
 });
 
 const sanitizeState = (raw: unknown): DrawerMetadataState => {
@@ -123,6 +134,12 @@ const sanitizeState = (raw: unknown): DrawerMetadataState => {
           ? metadata.alias.trim()
           : undefined;
 
+      const visibility =
+        typeof metadata.visibility === "string" &&
+        VALID_VISIBILITIES.has(metadata.visibility as AppVisibility)
+          ? (metadata.visibility as AppVisibility)
+          : "default";
+
       return [
         [
           key,
@@ -135,6 +152,7 @@ const sanitizeState = (raw: unknown): DrawerMetadataState => {
                 ? metadata.pinnedOrder
                 : undefined,
             tagIds,
+            visibility,
           } satisfies DrawerAppMetadata,
         ],
       ];
@@ -482,6 +500,18 @@ export const DrawerMetadataProvider = ({
     [persist]
   );
 
+  const setVisibility = useCallback(
+    (packageName: string, visibility: AppVisibility) => {
+      persist((current) =>
+        updateAppMetadata(current, packageName, (metadata) => ({
+          ...metadata,
+          visibility,
+        }))
+      );
+    },
+    [persist]
+  );
+
   const reorderPinnedApps = useCallback(
     (packageNames: string[]) => {
       persist((current) => {
@@ -522,6 +552,7 @@ export const DrawerMetadataProvider = ({
         setAlias,
         setAppTags,
         setPinned,
+        setVisibility,
       },
       state,
     }),
@@ -533,6 +564,7 @@ export const DrawerMetadataProvider = ({
       setAlias,
       setAppTags,
       setPinned,
+      setVisibility,
       state,
     ]
   );

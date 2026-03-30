@@ -29,7 +29,11 @@ export const FONT_FAMILIES = [
 
 // --- Theme Constants ---
 
+/** Sentinel value stored in settings when the user selects "Material You" / system accent. */
+export const SYSTEM_ACCENT_VALUE = "system";
+
 export const ACCENT_COLORS = [
+  { name: "Material You", value: SYSTEM_ACCENT_VALUE },
   { name: "Red", value: "#EF4444" },
   { name: "Orange", value: "#F97316" },
   { name: "Amber", value: "#F59E0B" },
@@ -126,6 +130,7 @@ export interface SearchSettings {
   shortcutSearch: boolean;
   calculator: boolean;
   unitConverter: boolean;
+  currencyConverter: boolean;
   wikipediaSearch: boolean;
   websiteSearch: boolean;
   locationSearch: boolean;
@@ -140,9 +145,24 @@ export type GestureAction =
   | "notifications"
   | "quick-settings"
   | "app-drawer"
+  | "widgets"
   | "recents"
   | "power-menu"
-  | "lock-screen";
+  | "lock-screen"
+  | "launch-app";
+
+export type GestureKey =
+  | "swipeDown"
+  | "swipeUp"
+  | "swipeLeft"
+  | "swipeRight"
+  | "doubleTap"
+  | "longPress";
+
+export interface LaunchAppBinding {
+  packageName: string;
+  label: string;
+}
 
 export interface GestureSettings {
   swipeDown: GestureAction;
@@ -151,6 +171,7 @@ export interface GestureSettings {
   swipeRight: GestureAction;
   doubleTap: GestureAction;
   longPress: GestureAction;
+  launchAppBindings: Record<string, LaunchAppBinding>;
 }
 
 // --- Integrations ---
@@ -160,6 +181,7 @@ export type SearchEngine = "google" | "duckduckgo" | "bing";
 
 export interface IntegrationSettings {
   weatherProvider: WeatherProvider;
+  openWeatherMapApiKey: string;
   autoLocation: boolean;
   manualLocation: string;
   calendarEnabled: boolean;
@@ -227,6 +249,7 @@ export const DEFAULT_SETTINGS: LauncherSettingsData = {
   },
   gestures: {
     doubleTap: "lock-screen",
+    launchAppBindings: {},
     longPress: "none",
     swipeDown: "notifications",
     swipeLeft: "none",
@@ -270,6 +293,7 @@ export const DEFAULT_SETTINGS: LauncherSettingsData = {
     mediaEnabled: true,
     nextcloudEnabled: false,
     nextcloudUrl: "",
+    openWeatherMapApiKey: "",
     searchEngine: "google",
     weatherProvider: "openweathermap",
   },
@@ -285,6 +309,7 @@ export const DEFAULT_SETTINGS: LauncherSettingsData = {
     calendarSearch: true,
     contactCallOnTap: false,
     contactSearch: true,
+    currencyConverter: true,
     fileSearch: false,
     filterBarEnabled: true,
     locationSearch: false,

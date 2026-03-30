@@ -7,11 +7,21 @@ import type {
   SearchResultType,
 } from "@/types/search";
 
+// --- Text Normalization ---
+
+/**
+ * Strips diacritical marks (accents) from text so that e.g. "cafe" matches "Café".
+ * Uses Unicode NFD decomposition to separate base characters from combining marks,
+ * then removes the combining diacritical marks range (U+0300–U+036F).
+ */
+export const normalizeText = (text: string): string =>
+  text.normalize("NFD").replaceAll(/[\u0300-\u036F]/g, "");
+
 // --- Text Matching ---
 
 export const matchScore = (query: string, target: string): number => {
-  const q = query.toLowerCase();
-  const t = target.toLowerCase();
+  const q = normalizeText(query.toLowerCase());
+  const t = normalizeText(target.toLowerCase());
   if (t === q) {
     return 1;
   }

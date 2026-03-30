@@ -3,6 +3,7 @@ import {
   useCallback,
   useEffect,
   useMemo,
+  useRef,
   useState,
 } from "react";
 import { Appearance } from "react-native";
@@ -154,6 +155,10 @@ export const SettingsProvider = ({
   );
 
   // Apply Uniwind theme whenever preset or color scheme changes
+  // Guard: track last applied theme to prevent re-set loops
+  // (Uniwind.setTheme can trigger Appearance change events on some devices)
+  const lastAppliedThemeRef = useRef("");
+
   useEffect(() => {
     const resolveMode = (scheme: ColorScheme): "light" | "dark" => {
       if (scheme === "system") {
@@ -178,9 +183,17 @@ export const SettingsProvider = ({
       return mode;
     };
 
+    const applyTheme = (themeName: string) => {
+      if (lastAppliedThemeRef.current === themeName) {
+        return;
+      }
+      lastAppliedThemeRef.current = themeName;
+      Uniwind.setTheme(themeName as Parameters<typeof Uniwind.setTheme>[0]);
+    };
+
     const mode = resolveMode(state.appearance.colorScheme);
     const themeName = resolveThemeName(state.appearance.themePreset, mode);
-    Uniwind.setTheme(themeName as Parameters<typeof Uniwind.setTheme>[0]);
+    applyTheme(themeName);
 
     // Listen for system appearance changes when scheme is "system"
     if (state.appearance.colorScheme === "system") {
@@ -190,7 +203,7 @@ export const SettingsProvider = ({
           state.appearance.themePreset,
           newMode
         );
-        Uniwind.setTheme(newTheme as Parameters<typeof Uniwind.setTheme>[0]);
+        applyTheme(newTheme);
       });
       return () => listener.remove();
     }

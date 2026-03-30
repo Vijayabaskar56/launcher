@@ -21,6 +21,7 @@ import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { AppListContext, AppListProvider } from "@/context/app-list";
 import { DrawerMetadataProvider } from "@/context/drawer-metadata";
 import { LauncherConfigProvider } from "@/context/launcher-config";
+import { NotificationBadgesProvider } from "@/context/notification-badges";
 import { SettingsContext, SettingsProvider } from "@/context/settings";
 import { ThemeOverridesProvider } from "@/context/theme-overrides";
 import { WidgetConfigProvider } from "@/context/widget-config";
@@ -33,9 +34,11 @@ const AppProviders = ({ children }: { children: React.ReactNode }) => {
     [appList.apps]
   );
   return (
-    <DrawerMetadataProvider installedPackages={installedPackages}>
-      {children}
-    </DrawerMetadataProvider>
+    <NotificationBadgesProvider>
+      <DrawerMetadataProvider installedPackages={installedPackages}>
+        {children}
+      </DrawerMetadataProvider>
+    </NotificationBadgesProvider>
   );
 };
 

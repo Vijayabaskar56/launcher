@@ -1,14 +1,18 @@
 import { use, useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { AppListContext } from "@/context/app-list";
+import { DrawerMetadataContext } from "@/context/drawer-metadata";
+import type { AppVisibility } from "@/context/drawer-metadata";
 import { SettingsContext } from "@/context/settings";
 import { getSearchActions } from "@/lib/search-actions";
 import { appProvider } from "@/lib/search-providers/app-provider";
 import { calculatorProvider } from "@/lib/search-providers/calculator-provider";
 import { calendarProvider } from "@/lib/search-providers/calendar-provider";
 import { contactProvider } from "@/lib/search-providers/contact-provider";
+import { currencyProvider } from "@/lib/search-providers/currency-provider";
 import { locationProvider } from "@/lib/search-providers/location-provider";
 import { unitConverterProvider } from "@/lib/search-providers/unit-converter-provider";
+import { websiteProvider } from "@/lib/search-providers/website-provider";
 import { wikipediaProvider } from "@/lib/search-providers/wikipedia-provider";
 import { createSearchSession, getAvailableFilters } from "@/lib/search-service";
 import { storage } from "@/lib/storage";
@@ -38,6 +42,7 @@ interface UseSearchResult {
 
 export const useSearch = (query: string): UseSearchResult => {
   const appList = use(AppListContext);
+  const drawerMetadata = use(DrawerMetadataContext);
   const settingsCtx = use(SettingsContext);
   const settings = settingsCtx?.state;
 
@@ -69,6 +74,9 @@ export const useSearch = (query: string): UseSearchResult => {
     if (settings.search.unitConverter) {
       providers.push(unitConverterProvider);
     }
+    if (settings.search.currencyConverter) {
+      providers.push(currencyProvider);
+    }
     if (settings.search.contactSearch) {
       providers.push(contactProvider);
     }
@@ -78,16 +86,49 @@ export const useSearch = (query: string): UseSearchResult => {
     if (settings.search.wikipediaSearch) {
       providers.push(wikipediaProvider);
     }
+    if (settings.search.websiteSearch) {
+      providers.push(websiteProvider);
+    }
     if (settings.search.locationSearch) {
       providers.push(locationProvider);
     }
     return providers;
   }, [settings]);
 
+  // Build alias lookup from drawer metadata
+  const appAliases = useMemo((): Record<string, string> => {
+    const aliases: Record<string, string> = {};
+    const metadataApps = drawerMetadata?.state.apps;
+    if (metadataApps) {
+      for (const [pkg, metadata] of Object.entries(metadataApps)) {
+        if (metadata.alias) {
+          aliases[pkg] = metadata.alias;
+        }
+      }
+    }
+    return aliases;
+  }, [drawerMetadata?.state.apps]);
+
+  // Build visibility lookup from drawer metadata
+  const appVisibility = useMemo((): Record<string, AppVisibility> => {
+    const visibility: Record<string, AppVisibility> = {};
+    const metadataApps = drawerMetadata?.state.apps;
+    if (metadataApps) {
+      for (const [pkg, metadata] of Object.entries(metadataApps)) {
+        if (metadata.visibility && metadata.visibility !== "default") {
+          visibility[pkg] = metadata.visibility;
+        }
+      }
+    }
+    return visibility;
+  }, [drawerMetadata?.state.apps]);
+
   // Build provider deps
   const deps = useMemo((): ProviderDeps => {
     const usageCounts = getUsageCounts();
     return {
+      appAliases,
+      appVisibility,
       apps: appList.apps,
       launchApp: (packageName: string) => {
         recordLaunch(`app-${packageName}`);
@@ -99,6 +140,7 @@ export const useSearch = (query: string): UseSearchResult => {
         calendarSearch: true,
         contactCallOnTap: false,
         contactSearch: true,
+        currencyConverter: true,
         fileSearch: false,
         filterBarEnabled: true,
         locationSearch: false,
@@ -110,7 +152,7 @@ export const useSearch = (query: string): UseSearchResult => {
       },
       usageCounts,
     };
-  }, [appList.apps, settings]);
+  }, [appAliases, appVisibility, appList.apps, settings]);
 
   // Search actions (pattern matching)
   const actions = useMemo((): SearchActionMatch[] => {

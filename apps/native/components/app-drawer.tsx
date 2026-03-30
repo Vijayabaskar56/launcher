@@ -16,18 +16,14 @@ import {
   Vibration,
   View,
 } from "react-native";
-import { Gesture, GestureDetector } from "react-native-gesture-handler";
+import { GestureDetector } from "react-native-gesture-handler";
 import Animated, {
-  Easing,
-  interpolate,
-  runOnJS,
   useAnimatedReaction,
-  useAnimatedStyle,
   useSharedValue,
-  withTiming,
 } from "react-native-reanimated";
 import type { SharedValue } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { scheduleOnRN } from "react-native-worklets";
 
 import { AppListContext } from "@/context/app-list";
 import {
@@ -39,7 +35,14 @@ import {
 import type { DrawerTag } from "@/context/drawer-metadata";
 import { LauncherConfigContext } from "@/context/launcher-config";
 import { SettingsContext } from "@/context/settings";
+import { useDirectionalDismiss } from "@/hooks/use-directional-dismiss";
+import {
+  isHorizontal,
+  useDirectionalPanel,
+} from "@/hooks/use-directional-panel";
+import type { SlideFrom } from "@/hooks/use-directional-panel";
 import { useSearch } from "@/hooks/use-search";
+import { sortedSections } from "@/lib/search-service";
 
 import { AppDrawerActionMenu } from "./app-drawer/action-menu";
 import { AppDrawerEditSheet } from "./app-drawer/edit-sheet";
@@ -53,10 +56,9 @@ import { useSearchBar } from "./search-bar";
 import { SearchResultsList } from "./search/search-results-list";
 import { Icon, ICON_MAP } from "./ui/icon";
 
-const TIMING_CONFIG = { duration: 300, easing: Easing.out(Easing.cubic) };
-
 interface AppDrawerProps {
-  translateY: SharedValue<number>;
+  offset: SharedValue<number>;
+  slideFrom: SharedValue<SlideFrom>;
 }
 
 const sortItems = function sortItems<T>(
@@ -336,7 +338,7 @@ const LauncherSection = ({
 );
 
 // eslint-disable-next-line complexity
-export const AppDrawer = ({ translateY }: AppDrawerProps) => {
+export const AppDrawer = ({ offset, slideFrom }: AppDrawerProps) => {
   const { height: screenHeight, width: screenWidth } = useWindowDimensions();
   const insets = useSafeAreaInsets();
   const config = use(LauncherConfigContext);
@@ -356,11 +358,44 @@ export const AppDrawer = ({ translateY }: AppDrawerProps) => {
   const [editorFocusMode, setEditorFocusMode] =
     useState<DrawerEditorFocusMode | null>(null);
 
-  const searchQuery = useDeferredValue(search?.state.query.trim() ?? "");
+  const searchQuery = useDeferredValue(search?.state.searchText.trim() ?? "");
   const normalizedSearchQuery = searchQuery.toLowerCase();
   const isSearching = normalizedSearchQuery.length > 0;
 
   const searchResults = useSearch(searchQuery);
+
+  // Wire filter toggle ref so #filter suggestions can toggle search filters
+  useEffect(() => {
+    if (search?.filterToggleRef) {
+      search.filterToggleRef.current = searchResults.handleToggleFilter;
+    }
+  }, [search, searchResults.handleToggleFilter]);
+
+  // Wire submit ref so pressing Enter launches the best match
+  const handleSubmitSearch = useCallback(() => {
+    // Try the first result from the highest-priority section
+    const sections = sortedSections(searchResults.results);
+    if (sections.length > 0) {
+      const [topSection] = sections;
+      const [firstResult] = topSection.data;
+      if (firstResult) {
+        firstResult.onPress();
+        return;
+      }
+    }
+
+    // Fall back to the first quick action
+    const [firstAction] = searchResults.actions;
+    if (firstAction) {
+      firstAction.onPress();
+    }
+  }, [searchResults.results, searchResults.actions]);
+
+  useEffect(() => {
+    if (search?.submitRef) {
+      search.submitRef.current = handleSubmitSearch;
+    }
+  }, [search, handleSubmitSearch]);
 
   const handleCloseActionMenu = useCallback(() => {
     setActionMenu(null);
@@ -378,13 +413,16 @@ export const AppDrawer = ({ translateY }: AppDrawerProps) => {
   }, [handleCloseActionMenu, handleCloseEditor]);
 
   useAnimatedReaction(
-    () => translateY.value > screenHeight - 10,
+    () => {
+      const size = isHorizontal(slideFrom.value) ? screenWidth : screenHeight;
+      return offset.value > size - 10;
+    },
     (isClosed, wasClosed) => {
       if (isClosed && !wasClosed) {
-        runOnJS(resetScrollPosition)();
+        scheduleOnRN(resetScrollPosition);
       }
     },
-    [screenHeight]
+    [screenHeight, screenWidth]
   );
 
   useEffect(() => {
@@ -401,10 +439,12 @@ export const AppDrawer = ({ translateY }: AppDrawerProps) => {
     }
   }, [activeTagId, drawerMetadata]);
 
-  const animatedStyle = useAnimatedStyle(() => ({
-    opacity: interpolate(translateY.value, [screenHeight, 0], [0, 1]),
-    transform: [{ translateY: translateY.value }],
-  }));
+  const { animatedStyle } = useDirectionalPanel({
+    offset,
+    screenHeight,
+    screenWidth,
+    slideFrom,
+  });
 
   const handleScroll = useCallback(
     (event: { nativeEvent: { contentOffset: { y: number } } }) => {
@@ -413,23 +453,13 @@ export const AppDrawer = ({ translateY }: AppDrawerProps) => {
     [scrollOffset]
   );
 
-  const panGesture = Gesture.Pan()
-    .onUpdate((event) => {
-      "worklet";
-      if (scrollOffset.value <= 0 && event.translationY > 0) {
-        translateY.value = event.translationY;
-      }
-    })
-    .onEnd((event) => {
-      "worklet";
-      translateY.value = withTiming(
-        event.translationY > screenHeight * 0.25 || event.velocityY > 500
-          ? screenHeight
-          : 0,
-        TIMING_CONFIG
-      );
-    })
-    .activeOffsetY(10);
+  const panGesture = useDirectionalDismiss({
+    offset,
+    screenHeight,
+    screenWidth,
+    scrollOffset,
+    slideFrom,
+  });
 
   const iconShape = settings?.state.icons.iconShape ?? "circle";
   const showLabels = settings?.state.icons.showLabels ?? true;
@@ -446,11 +476,15 @@ export const AppDrawer = ({ translateY }: AppDrawerProps) => {
           isPinned: metadata?.isPinned ?? false,
           pinnedOrder: metadata?.pinnedOrder,
           tagIds: metadata?.tagIds ?? [],
+          visibility: metadata?.visibility ?? "default",
         };
       })
     : [];
 
-  const sortedApps = sortAppsAlphabetically(allApps);
+  const drawerVisibleApps = allApps.filter(
+    (app) => app.visibility === "default"
+  );
+  const sortedApps = sortAppsAlphabetically(drawerVisibleApps);
   const appByPkg = Object.fromEntries(
     allApps.map((app) => [app.packageName, app])
   );
@@ -460,9 +494,10 @@ export const AppDrawer = ({ translateY }: AppDrawerProps) => {
   const orderedPinnedPkgs = drawerMetadata
     ? getOrderedPinnedPackages(drawerMetadata.state)
     : [];
-  const pinnedApps = orderedPinnedPkgs.flatMap((pkg) =>
-    appByPkg[pkg] ? [appByPkg[pkg]] : []
-  );
+  const pinnedApps = orderedPinnedPkgs.flatMap((pkg) => {
+    const app = appByPkg[pkg];
+    return app && app.visibility === "default" ? [app] : [];
+  });
   const filteredPinnedApps =
     activeTagId === null
       ? pinnedApps
@@ -529,10 +564,12 @@ export const AppDrawer = ({ translateY }: AppDrawerProps) => {
       alias,
       isPinned,
       tagIds,
+      visibility,
     }: {
       alias: string;
       isPinned: boolean;
       tagIds: string[];
+      visibility: "default" | "search-only" | "hidden";
     }) => {
       if (!editorApp) {
         return;
@@ -548,6 +585,7 @@ export const AppDrawer = ({ translateY }: AppDrawerProps) => {
       );
       drawerActions.setAppTags(editorApp.packageName, tagIds);
       drawerActions.setPinned(editorApp.packageName, isPinned);
+      drawerActions.setVisibility(editorApp.packageName, visibility);
       handleCloseEditor();
     },
     [drawerActions, editorApp, handleCloseEditor]

@@ -1,121 +1,262 @@
-import { use, useCallback } from "react";
-import { ScrollView } from "react-native";
+import { MaterialIcons } from "@expo/vector-icons";
+import { useThemeColor } from "heroui-native";
+import { use, useCallback, useState } from "react";
+import { Image, Pressable, ScrollView, Text, View } from "react-native";
 
+import { AppPickerSheet } from "@/components/settings/app-picker-sheet";
+import { GestureActionSheet } from "@/components/settings/gesture-action-sheet";
 import { PreferenceCategory } from "@/components/settings/preference-category";
-import { SelectPreference } from "@/components/settings/select-preference";
+import { AppListContext } from "@/context/app-list";
 import { SettingsContext } from "@/context/settings";
-import type { GestureAction } from "@/types/settings";
+import { useThemeOverrides } from "@/context/theme-overrides";
+import { GESTURE_ACTION_LABELS } from "@/lib/gesture-actions";
+import type { GestureAction, GestureKey } from "@/types/settings";
 
-const GESTURE_OPTIONS: { label: string; value: GestureAction }[] = [
-  { label: "None", value: "none" },
-  { label: "Search", value: "search" },
-  { label: "Notifications", value: "notifications" },
-  { label: "Quick Settings", value: "quick-settings" },
-  { label: "App Drawer", value: "app-drawer" },
-  { label: "Recents", value: "recents" },
-  { label: "Power Menu", value: "power-menu" },
-  { label: "Lock Screen", value: "lock-screen" },
+// --- Gesture row configuration ---
+
+interface GestureRowConfig {
+  key: GestureKey;
+  label: string;
+  icon: keyof typeof MaterialIcons.glyphMap;
+}
+
+const SWIPE_GESTURES: GestureRowConfig[] = [
+  { icon: "swipe-down", key: "swipeDown", label: "Swipe Down" },
+  { icon: "swipe-up", key: "swipeUp", label: "Swipe Up" },
+  { icon: "swipe-left", key: "swipeLeft", label: "Swipe Left" },
+  { icon: "swipe-right", key: "swipeRight", label: "Swipe Right" },
 ];
+
+const TAP_GESTURES: GestureRowConfig[] = [
+  { icon: "touch-app", key: "doubleTap", label: "Double Tap" },
+  { icon: "touch-app", key: "longPress", label: "Long Press" },
+];
+
+// --- Gesture Row Component ---
+
+const GestureRow = ({
+  config,
+  currentAction,
+  appLabel,
+  appIcon,
+  onPress,
+}: {
+  config: GestureRowConfig;
+  currentAction: GestureAction;
+  appLabel?: string;
+  appIcon?: string;
+  onPress: () => void;
+}) => {
+  const { fontFamily, smallRadius } = useThemeOverrides();
+  const [foreground, muted, defaultBg] = useThemeColor([
+    "foreground",
+    "muted",
+    "default",
+  ] as const);
+
+  const actionLabel =
+    currentAction === "launch-app" && appLabel
+      ? `Launch ${appLabel}`
+      : GESTURE_ACTION_LABELS[currentAction];
+
+  return (
+    <Pressable
+      onPress={onPress}
+      style={({ pressed }) => ({
+        alignItems: "center",
+        flexDirection: "row",
+        gap: 14,
+        opacity: pressed ? 0.7 : 1,
+        paddingHorizontal: 16,
+        paddingVertical: 14,
+      })}
+    >
+      {/* Icon */}
+      <View
+        style={{
+          alignItems: "center",
+          backgroundColor: defaultBg,
+          borderCurve: "continuous",
+          borderRadius: smallRadius,
+          height: 40,
+          justifyContent: "center",
+          width: 40,
+        }}
+      >
+        <MaterialIcons name={config.icon} size={22} color={foreground} />
+      </View>
+
+      {/* Title + subtitle */}
+      <View style={{ flex: 1, gap: 2 }}>
+        <Text
+          style={{
+            color: foreground,
+            fontFamily,
+            fontSize: 16,
+            fontWeight: "500",
+            letterSpacing: -0.2,
+          }}
+        >
+          {config.label}
+        </Text>
+        <Text
+          style={{
+            color: muted,
+            fontSize: 13,
+            fontWeight: "400",
+            letterSpacing: -0.1,
+          }}
+        >
+          {actionLabel}
+        </Text>
+      </View>
+
+      {/* App icon for launch-app */}
+      {currentAction === "launch-app" && appIcon ? (
+        <Image
+          source={{ uri: appIcon }}
+          style={{ borderRadius: 8, height: 32, width: 32 }}
+        />
+      ) : null}
+
+      {/* Chevron */}
+      <MaterialIcons name="chevron-right" size={20} color={muted} />
+    </Pressable>
+  );
+};
+
+// --- Main Screen ---
 
 export default function GesturesSettings() {
   const settings = use(SettingsContext);
+  const appList = use(AppListContext);
+  const [activeGestureKey, setActiveGestureKey] = useState<GestureKey | null>(
+    null
+  );
+  const [activeGestureLabel, setActiveGestureLabel] = useState("");
+  const [showAppPicker, setShowAppPicker] = useState(false);
 
-  const handleSwipeDown = useCallback(
-    (v: GestureAction) => {
-      settings?.actions.updateGestures({ swipeDown: v });
+  const handleOpenSheet = useCallback((key: GestureKey, label: string) => {
+    setActiveGestureKey(key);
+    setActiveGestureLabel(label);
+  }, []);
+
+  const handleCloseSheet = useCallback(() => {
+    setActiveGestureKey(null);
+    setActiveGestureLabel("");
+  }, []);
+
+  const handleSelectAction = useCallback(
+    (action: GestureAction) => {
+      if (!settings || !activeGestureKey) {
+        return;
+      }
+      settings.actions.updateGestures({ [activeGestureKey]: action });
+      handleCloseSheet();
     },
-    [settings]
+    [settings, activeGestureKey, handleCloseSheet]
   );
-  const handleSwipeUp = useCallback(
-    (v: GestureAction) => {
-      settings?.actions.updateGestures({ swipeUp: v });
+
+  const handleSelectLaunchApp = useCallback(() => {
+    setShowAppPicker(true);
+  }, []);
+
+  const handleAppSelected = useCallback(
+    (packageName: string, label: string) => {
+      if (!settings || !activeGestureKey) {
+        return;
+      }
+      const currentBindings = settings.state.gestures.launchAppBindings;
+      settings.actions.updateGestures({
+        [activeGestureKey]: "launch-app",
+        launchAppBindings: {
+          ...currentBindings,
+          [activeGestureKey]: { label, packageName },
+        },
+      });
+      setShowAppPicker(false);
+      handleCloseSheet();
     },
-    [settings]
+    [settings, activeGestureKey, handleCloseSheet]
   );
-  const handleSwipeLeft = useCallback(
-    (v: GestureAction) => {
-      settings?.actions.updateGestures({ swipeLeft: v });
-    },
-    [settings]
-  );
-  const handleSwipeRight = useCallback(
-    (v: GestureAction) => {
-      settings?.actions.updateGestures({ swipeRight: v });
-    },
-    [settings]
-  );
-  const handleDoubleTap = useCallback(
-    (v: GestureAction) => {
-      settings?.actions.updateGestures({ doubleTap: v });
-    },
-    [settings]
-  );
-  const handleLongPress = useCallback(
-    (v: GestureAction) => {
-      settings?.actions.updateGestures({ longPress: v });
-    },
-    [settings]
-  );
+
+  const handleCloseAppPicker = useCallback(() => {
+    setShowAppPicker(false);
+  }, []);
 
   if (!settings) {
     return null;
   }
 
-  const { state } = settings;
-  const { gestures } = state;
+  const { gestures } = settings.state;
+
+  const getAppInfo = (key: GestureKey) => {
+    const binding = gestures.launchAppBindings[key];
+    if (!binding) {
+      return { appIcon: undefined, appLabel: undefined };
+    }
+    const app = appList.apps.find((a) => a.packageName === binding.packageName);
+    return { appIcon: app?.icon ?? undefined, appLabel: binding.label };
+  };
+
+  const currentAction = activeGestureKey
+    ? (gestures[activeGestureKey] as GestureAction)
+    : "none";
 
   return (
-    <ScrollView
-      className="flex-1 bg-background"
-      contentInsetAdjustmentBehavior="automatic"
-      contentContainerStyle={{ gap: 20, paddingBottom: 40, paddingTop: 8 }}
-    >
-      <PreferenceCategory title="Swipe Gestures">
-        <SelectPreference
-          icon="swipe-down"
-          title="Swipe Down"
-          value={gestures.swipeDown}
-          options={GESTURE_OPTIONS}
-          onValueChange={handleSwipeDown}
-        />
-        <SelectPreference
-          icon="swipe-up"
-          title="Swipe Up"
-          value={gestures.swipeUp}
-          options={GESTURE_OPTIONS}
-          onValueChange={handleSwipeUp}
-        />
-        <SelectPreference
-          icon="swipe-left"
-          title="Swipe Left"
-          value={gestures.swipeLeft}
-          options={GESTURE_OPTIONS}
-          onValueChange={handleSwipeLeft}
-        />
-        <SelectPreference
-          icon="swipe-right"
-          title="Swipe Right"
-          value={gestures.swipeRight}
-          options={GESTURE_OPTIONS}
-          onValueChange={handleSwipeRight}
-        />
-      </PreferenceCategory>
+    <>
+      <ScrollView
+        className="flex-1 bg-background"
+        contentInsetAdjustmentBehavior="automatic"
+        contentContainerStyle={{ gap: 20, paddingBottom: 40, paddingTop: 8 }}
+      >
+        <PreferenceCategory title="Swipe Gestures">
+          {SWIPE_GESTURES.map((config) => {
+            const { appIcon, appLabel } = getAppInfo(config.key);
+            return (
+              <GestureRow
+                key={config.key}
+                config={config}
+                currentAction={gestures[config.key] as GestureAction}
+                appLabel={appLabel}
+                appIcon={appIcon}
+                onPress={() => handleOpenSheet(config.key, config.label)}
+              />
+            );
+          })}
+        </PreferenceCategory>
 
-      <PreferenceCategory title="Tap Gestures">
-        <SelectPreference
-          icon="touch-app"
-          title="Double Tap"
-          value={gestures.doubleTap}
-          options={GESTURE_OPTIONS}
-          onValueChange={handleDoubleTap}
-        />
-        <SelectPreference
-          title="Long Press"
-          value={gestures.longPress}
-          options={GESTURE_OPTIONS}
-          onValueChange={handleLongPress}
-        />
-      </PreferenceCategory>
-    </ScrollView>
+        <PreferenceCategory title="Tap Gestures">
+          {TAP_GESTURES.map((config) => {
+            const { appIcon, appLabel } = getAppInfo(config.key);
+            return (
+              <GestureRow
+                key={config.key}
+                config={config}
+                currentAction={gestures[config.key] as GestureAction}
+                appLabel={appLabel}
+                appIcon={appIcon}
+                onPress={() => handleOpenSheet(config.key, config.label)}
+              />
+            );
+          })}
+        </PreferenceCategory>
+      </ScrollView>
+
+      <GestureActionSheet
+        gestureKey={activeGestureKey}
+        gestureLabel={activeGestureLabel}
+        currentAction={currentAction}
+        onSelect={handleSelectAction}
+        onClose={handleCloseSheet}
+        onSelectLaunchApp={handleSelectLaunchApp}
+      />
+
+      <AppPickerSheet
+        visible={showAppPicker}
+        onSelect={handleAppSelected}
+        onClose={handleCloseAppPicker}
+      />
+    </>
   );
 }

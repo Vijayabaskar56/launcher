@@ -13,9 +13,17 @@ export const appProvider: SearchProvider = {
     const results: SearchResult[] = [];
 
     for (const app of deps.apps) {
+      // Skip apps that are hidden from search
+      const visibility = deps.appVisibility[app.packageName] ?? "default";
+      if (visibility === "hidden") {
+        continue;
+      }
+
+      const alias = deps.appAliases[app.packageName];
       const nameScore = matchScore(query, app.appName);
       const pkgScore = matchScore(query, app.packageName);
-      const textScore = Math.max(nameScore, pkgScore);
+      const aliasScore = alias ? matchScore(query, alias) : 0;
+      const textScore = Math.max(nameScore, pkgScore, aliasScore);
 
       if (textScore < 0.3) {
         continue;
@@ -27,6 +35,8 @@ export const appProvider: SearchProvider = {
         deps.maxUsage
       );
 
+      const displayTitle = alias ?? app.appName;
+
       results.push({
         data: { packageName: app.packageName },
         icon: app.icon ?? undefined,
@@ -34,8 +44,8 @@ export const appProvider: SearchProvider = {
         id: `app-${app.packageName}`,
         onPress: () => deps.launchApp(app.packageName),
         score,
-        subtitle: app.packageName,
-        title: app.appName,
+        subtitle: alias ? app.appName : app.packageName,
+        title: displayTitle,
         type: "app",
       });
     }

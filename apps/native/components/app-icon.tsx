@@ -9,6 +9,7 @@ import Svg, {
   Rect,
 } from "react-native-svg";
 
+import { useNotificationBadge } from "@/hooks/use-notification-badge";
 import { getIconClipPath } from "@/lib/icon-shapes";
 import type { IconShape } from "@/types/settings";
 
@@ -163,6 +164,55 @@ const SvgShapeIcon = ({
   );
 };
 
+/** Notification badge indicator at top-right of icon */
+const NotificationBadge = ({
+  count,
+  size,
+}: {
+  count: number;
+  size: number;
+}) => {
+  if (count <= 0) {
+    return null;
+  }
+
+  const badgeSize = Math.max(16, size * 0.32);
+  const fontSize = badgeSize * 0.6;
+  const showCount = count <= 99;
+
+  return (
+    <View
+      style={{
+        alignItems: "center",
+        backgroundColor: "#ef4444",
+        borderColor: "#ffffff",
+        borderRadius: badgeSize / 2,
+        borderWidth: 1.5,
+        height: badgeSize,
+        justifyContent: "center",
+        minWidth: badgeSize,
+        paddingHorizontal: count > 9 ? 3 : 0,
+        position: "absolute",
+        right: -4,
+        top: -4,
+        zIndex: 10,
+      }}
+    >
+      <Text
+        style={{
+          color: "#ffffff",
+          fontSize,
+          fontWeight: "700",
+          lineHeight: badgeSize - 3,
+          textAlign: "center",
+        }}
+      >
+        {showCount ? count : "99+"}
+      </Text>
+    </View>
+  );
+};
+
 export const AppIcon = forwardRef<View, AppIconProps>(
   (
     {
@@ -180,6 +230,8 @@ export const AppIcon = forwardRef<View, AppIconProps>(
     },
     ref
   ) => {
+    const badgeCount = useNotificationBadge(packageName);
+
     const handleLayout = useCallback(
       (event: LayoutChangeEvent) => {
         if (!onLayout) {
@@ -222,6 +274,8 @@ export const AppIcon = forwardRef<View, AppIconProps>(
               packageName={packageName}
             />
           )}
+          {/* Notification badge */}
+          <NotificationBadge count={badgeCount} size={size} />
           {/* Pinned badge */}
           {isPinned ? (
             <View

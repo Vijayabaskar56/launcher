@@ -1,4 +1,5 @@
 import type { InstalledApp } from "@/context/app-list";
+import type { AppVisibility } from "@/context/drawer-metadata";
 import type { SearchSettings } from "@/types/settings";
 
 // --- Result Types ---
@@ -9,7 +10,9 @@ export type SearchResultType =
   | "calendar"
   | "calculator"
   | "unit-converter"
+  | "currency"
   | "wikipedia"
+  | "website"
   | "location"
   | "action";
 
@@ -38,6 +41,8 @@ export interface ContactResultData {
 
 export interface ProviderDeps {
   apps: InstalledApp[];
+  appAliases: Record<string, string>;
+  appVisibility: Record<string, AppVisibility>;
   launchApp: (packageName: string) => void;
   settings: SearchSettings;
   usageCounts: Record<string, number>;
@@ -63,8 +68,10 @@ export const RESULT_TYPE_TO_FILTER: Record<SearchResultType, SearchFilter> = {
   calculator: "tools",
   calendar: "events",
   contact: "contacts",
+  currency: "tools",
   location: "web",
   "unit-converter": "tools",
+  website: "web",
   wikipedia: "web",
 };
 
@@ -74,9 +81,11 @@ export const SECTION_ORDER: SearchResultType[] = [
   "app",
   "calculator",
   "unit-converter",
+  "currency",
   "contact",
   "calendar",
   "wikipedia",
+  "website",
   "location",
 ];
 
@@ -86,15 +95,26 @@ export const SECTION_LABELS: Record<SearchResultType, string> = {
   calculator: "Calculator",
   calendar: "Calendar",
   contact: "Contacts",
+  currency: "Currency",
   location: "Places",
   "unit-converter": "Unit Converter",
+  website: "Website",
   wikipedia: "Wikipedia",
 };
 
 // --- Quick Actions ---
 
 export interface SearchActionMatch {
-  type: "call" | "sms" | "email" | "url" | "web-search";
+  type:
+    | "call"
+    | "sms"
+    | "email"
+    | "url"
+    | "web-search"
+    | "create-contact"
+    | "set-alarm"
+    | "start-timer"
+    | "create-event";
   label: string;
   icon: string;
   onPress: () => void;

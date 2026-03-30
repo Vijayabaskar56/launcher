@@ -1,0 +1,20 @@
+{
+  "$schema": "https://nitro.margelo.com/nitro.schema.json",
+  "cxxNamespace": ["accessibilityactions"],
+  "ios": {
+    "iosModuleName": "NitroAccessibilityActions"
+  },
+  "android": {
+    "androidNamespace": ["accessibilityactions"],
+    "androidCxxLibName": "NitroAccessibilityActions"
+  },
+  "autolinking": {
+    "AccessibilityActions": {
+      "android": {
+        "language": "kotlin",
+        "implementationClassName": "HybridAccessibilityActions"
+      }
+    }
+  },
+  "ignorePaths": ["**/node_modules"]
+}

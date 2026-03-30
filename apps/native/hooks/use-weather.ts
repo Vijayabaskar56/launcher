@@ -13,6 +13,7 @@ const REFRESH_INTERVAL = 30 * 60 * 1000;
 
 interface UseWeatherOptions {
   provider: WeatherProvider;
+  apiKey?: string;
   autoLocation: boolean;
   manualLocation: string;
 }
@@ -26,6 +27,7 @@ interface UseWeatherResult {
 
 export const useWeather = ({
   provider,
+  apiKey,
   autoLocation,
   manualLocation,
 }: UseWeatherOptions): UseWeatherResult => {
@@ -52,7 +54,13 @@ export const useWeather = ({
       const locationName =
         !autoLocation && manualLocation ? manualLocation : undefined;
 
-      const result = await fetchWeather(provider, lat, lon, locationName);
+      const result = await fetchWeather(
+        provider,
+        lat,
+        lon,
+        locationName,
+        apiKey
+      );
       setData(result);
     } catch (error) {
       setFetchError(
@@ -61,7 +69,7 @@ export const useWeather = ({
     } finally {
       setIsLoading(false);
     }
-  }, [provider, autoLocation, manualLocation]);
+  }, [provider, apiKey, autoLocation, manualLocation]);
 
   useEffect(() => {
     load();

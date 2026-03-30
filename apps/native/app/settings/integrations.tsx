@@ -17,6 +17,12 @@ export default function IntegrationsSettings() {
     },
     [settings]
   );
+  const handleOpenWeatherMapApiKey = useCallback(
+    (v: string) => {
+      settings?.actions.updateIntegrations({ openWeatherMapApiKey: v });
+    },
+    [settings]
+  );
   const handleAutoLocation = useCallback(
     (v: boolean) => {
       settings?.actions.updateIntegrations({ autoLocation: v });
@@ -99,6 +105,14 @@ export default function IntegrationsSettings() {
             { label: "None", value: "none" as WeatherProvider },
           ]}
           onValueChange={handleWeatherProvider}
+        />
+        <TextPreference
+          icon="vpn-key"
+          title="OpenWeatherMap API Key"
+          value={integrations.openWeatherMapApiKey}
+          onChangeText={handleOpenWeatherMapApiKey}
+          placeholder="Enter your API key"
+          disabled={integrations.weatherProvider !== "openweathermap"}
         />
         <SwitchPreference
           icon="my-location"

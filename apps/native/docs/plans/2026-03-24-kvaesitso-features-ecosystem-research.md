@@ -8,18 +8,17 @@
 
 ## Summary
 
-| Coverage Level           | Count | Examples                                                                                                                         |
-| ------------------------ | ----- | -------------------------------------------------------------------------------------------------------------------------------- |
-| **Done**                 | 35    | Search (apps, calc, contacts, calendar, wiki, location), filter bar, ranking, quick actions, backup, locale, weather, homescreen |
-| **Available Package**    | 5     | Gestures, notification listener, measurement conversion, create contact action, create calendar event                            |
-| **Partial / JS DIY**     | 16    | Currency, file search, website lookup, tags, hidden items, i18n, best match, custom labels, alarm/timer actions                  |
-| **Custom Native Module** | 10    | Media session, icon packs, lock screen, system panels, work profile, app shortcuts                                               |
+| Coverage Level           | Count | Examples                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
+| ------------------------ | ----- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Done**                 | 57    | Search (7 providers), filter bar, ranking, quick actions (call, SMS, email, URL, create contact, set alarm, create calendar event), best match launch on Enter, backup, locale, weather, homescreen (clock, battery, charging, system bars), gestures (6 configurable gestures, 10 actions, directional panels, haptics), accessibility actions (lock screen, notifications, quick settings, recents, power menu), Material You dynamic colors, notification badges |
+| **Partial / JS DIY**     | 12    | Currency, file search, website lookup, tags, hidden items, i18n, custom labels, item visibility, string normalization, theme import/export, Nextcloud, OpenWeatherMap                                                                                                                                                                                                                                                                                               |
+| **Custom Native Module** | 5     | Media session, icon packs, adaptive icons, work profile, app shortcuts                                                                                                                                                                                                                                                                                                                                                                                              |
 
-**Key insight:** The 12 custom native modules can be consolidated into **3 Expo modules**:
+**Key insight:** Of the original 3 planned Expo modules, 1 is fully complete and 1 is partially done:
 
-1. **AccessibilityService module** — lock screen, open notifications, quick settings, recents, power menu (5 features → 1 module)
-2. **NotificationListener module** — notification badges, media session reading, notification actions (3 features → 1 module)
-3. **Launcher module** — app list with icons, icon packs, adaptive icons, work profile, app uninstall (5 features → 1 module)
+1. **~~AccessibilityService module~~** — **DONE** (built as `react-native-accessibility-actions` Nitro module). Lock screen, notifications, quick settings, recents, power menu all working.
+2. **NotificationListener module** — **PARTIALLY DONE** (`expo-android-notification-listener-service` installed, badge counts working). Still needs: media session reading, notification actions.
+3. **Launcher module** — app list with icons, icon packs, adaptive icons, work profile, app uninstall (5 features → 1 module). **NOT STARTED**.
 
 ---
 
@@ -27,16 +26,16 @@
 
 ### 1. THEMING & APPEARANCE
 
-| Feature                       | Solution                                                                                           | Coverage      | Notes                                     |
-| ----------------------------- | -------------------------------------------------------------------------------------------------- | ------------- | ----------------------------------------- |
-| Light/Dark/System theme       | `Uniwind.setTheme()` from `uniwind`                                                                | **Done**      | Already implemented                       |
-| Custom color schemes          | HeroUI Native CSS variables                                                                        | **Done**      | Already implemented (3 presets)           |
-| Material You / Dynamic Colors | [`react-native-material-you-colors`](https://github.com/alabsi91/react-native-material-you-colors) | **Available** | Extracts system palette. Dev client only. |
-| Theme import/export           | `expo-document-picker` + `expo-file-system` + JSON                                                 | **JS DIY**    | Serialize settings to JSON file           |
-| Accent color picker           | `useThemeOverrides()` context                                                                      | **Done**      | Already implemented (14 swatches)         |
-| Corner radius                 | `useThemeOverrides().cardRadius`                                                                   | **Done**      | Already wired                             |
-| Font family                   | `expo-font` + Google Fonts                                                                         | **Done**      | Already wired (4 options)                 |
-| Transparency                  | `useThemeOverrides().transparency`                                                                 | **Done**      | Already wired                             |
+| Feature                       | Solution                                           | Coverage   | Notes                                                                                          |
+| ----------------------------- | -------------------------------------------------- | ---------- | ---------------------------------------------------------------------------------------------- |
+| Light/Dark/System theme       | `Uniwind.setTheme()` from `uniwind`                | **Done**   | Already implemented                                                                            |
+| Custom color schemes          | HeroUI Native CSS variables                        | **Done**   | Already implemented (3 presets)                                                                |
+| Material You / Dynamic Colors | `react-native-material-you-colors` (installed)     | **Done**   | "Material You" swatch in accent picker. Extracts system wallpaper color. Falls back to indigo. |
+| Theme import/export           | `expo-document-picker` + `expo-file-system` + JSON | **JS DIY** | Serialize settings to JSON file                                                                |
+| Accent color picker           | `useThemeOverrides()` context                      | **Done**   | Already implemented (14 swatches)                                                              |
+| Corner radius                 | `useThemeOverrides().cardRadius`                   | **Done**   | Already wired                                                                                  |
+| Font family                   | `expo-font` + Google Fonts                         | **Done**   | Already wired (4 options)                                                                      |
+| Transparency                  | `useThemeOverrides().transparency`                 | **Done**   | Already wired                                                                                  |
 
 ### 2. HOMESCREEN
 
@@ -90,19 +89,19 @@
 
 #### 4b. Search Actions (Quick Actions on Query)
 
-| Feature               | Solution                               | Coverage      | Notes                                                     |
-| --------------------- | -------------------------------------- | ------------- | --------------------------------------------------------- |
-| Phone call action     | `expo-linking` (`tel:` URI)            | **Done**      | Trigger when query matches phone number pattern.          |
-| SMS message action    | `expo-linking` (`sms:` URI)            | **Done**      | Trigger when query matches phone number pattern.          |
-| Email action          | `expo-linking` (`mailto:` URI)         | **Done**      | Trigger when query matches email pattern.                 |
-| Open URL action       | `expo-linking` or `expo-web-browser`   | **Done**      | Trigger when query is a valid URL.                        |
-| Create contact action | `expo-contacts`                        | **Available** | Offer when query is phone/email.                          |
-| Set alarm action      | `expo-intent-launcher`                 | **Partial**   | Android only. Trigger on time patterns like "8:30 AM".    |
-| Start timer action    | `expo-intent-launcher`                 | **Partial**   | Android only. Trigger on timespan patterns like "5 min".  |
-| Create calendar event | `expo-calendar`                        | **Available** | Trigger on date patterns.                                 |
-| Web search action     | `expo-linking` (URL template)          | **Done**      | Configurable engine (Google/DuckDuckGo/Bing) in settings. |
-| App search action     | `expo-intent-launcher` (ACTION_SEARCH) | **Partial**   | Android only. Launch in-app search for specific apps.     |
-| Custom intent action  | `expo-intent-launcher`                 | **Partial**   | Android only. Full intent configuration.                  |
+| Feature               | Solution                               | Coverage    | Notes                                                                          |
+| --------------------- | -------------------------------------- | ----------- | ------------------------------------------------------------------------------ |
+| Phone call action     | `expo-linking` (`tel:` URI)            | **Done**    | Trigger when query matches phone number pattern.                               |
+| SMS message action    | `expo-linking` (`sms:` URI)            | **Done**    | Trigger when query matches phone number pattern.                               |
+| Email action          | `expo-linking` (`mailto:` URI)         | **Done**    | Trigger when query matches email pattern.                                      |
+| Open URL action       | `expo-linking` or `expo-web-browser`   | **Done**    | Trigger when query is a valid URL.                                             |
+| Create contact action | `expo-contacts`                        | **Done**    | Triggers when query matches phone/email. Opens native contact form pre-filled. |
+| Set alarm action      | `expo-intent-launcher`                 | **Done**    | Android only. Triggers on "8:30 AM", "alarm 7:00". Fires `SET_ALARM` intent.   |
+| Start timer action    | `expo-intent-launcher`                 | **Partial** | Android only. Trigger on timespan patterns like "5 min".                       |
+| Create calendar event | `expo-calendar`                        | **Done**    | Triggers on "meeting tomorrow", "lunch friday". Creates event via intent/API.  |
+| Web search action     | `expo-linking` (URL template)          | **Done**    | Configurable engine (Google/DuckDuckGo/Bing) in settings.                      |
+| App search action     | `expo-intent-launcher` (ACTION_SEARCH) | **Partial** | Android only. Launch in-app search for specific apps.                          |
+| Custom intent action  | `expo-intent-launcher`                 | **Partial** | Android only. Full intent configuration.                                       |
 
 #### 4c. Search UI & Filtering
 
@@ -111,7 +110,7 @@
 | Filter bar             | Pure RN (horizontal ScrollView) | **Done**   | Docked above keyboard. 5 categories + globe network toggle.                |
 | Filter badge indicator | Pure RN                         | **Done**   | Active filter highlighted with accent color.                               |
 | Category sections      | Pure RN (SectionList)           | **Done**   | Kvaesitso section order. Auto-expand when single filter active.            |
-| Best match / launch    | Pure RN                         | **JS DIY** | Highlight first result. Launch on keyboard "Go" button.                    |
+| Best match / launch    | Pure RN                         | **Done**   | Enter/Go key launches first search result. Wired via `submitRef` pattern.  |
 | Network filter toggle  | Pure RN + MMKV                  | **Done**   | Globe icon in filter bar. Persists across sessions.                        |
 | Hidden items           | Pure RN (MMKV)                  | **JS DIY** | Items can be hidden from all views. Button to show hidden items in search. |
 | Custom labels          | Pure RN (MMKV)                  | **JS DIY** | Override display name for any searchable item.                             |
@@ -129,24 +128,24 @@
 
 ### 5. NOTIFICATIONS & BADGES
 
-| Feature               | Solution                                                                                                                                                                                                                                                  | Coverage      | Notes                                                                                       |
-| --------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------- | ------------------------------------------------------------------------------------------- |
-| Notification listener | [`react-native-android-notification-listener`](https://github.com/leandrosimoes/react-native-android-notification-listener) or [`expo-android-notification-listener-service`](https://github.com/SeokyoungYou/expo-android-notification-listener-service) | **Available** | Bridges `NotificationListenerService`. User must grant access in Settings. Dev client only. |
-| Badge counts          | Derived from notification listener                                                                                                                                                                                                                        | **Partial**   | Aggregate from notification events. No single package gives per-app counts.                 |
-| Notification actions  | **Custom Native Module**                                                                                                                                                                                                                                  | **Custom**    | Executing another app's notification actions requires extending the listener.               |
+| Feature               | Solution                                                 | Coverage   | Notes                                                                                     |
+| --------------------- | -------------------------------------------------------- | ---------- | ----------------------------------------------------------------------------------------- |
+| Notification listener | `expo-android-notification-listener-service` (installed) | **Done**   | Bridges `NotificationListenerService`. User must grant Notification Access in Settings.   |
+| Badge counts          | Derived from notification listener                       | **Done**   | `context/notification-badges.tsx` aggregates per-package counts. Badge dots on app icons. |
+| Notification actions  | **Custom Native Module**                                 | **Custom** | Executing another app's notification actions requires extending the listener.             |
 
 ### 6. GESTURES & SYSTEM ACTIONS
 
-| Feature                  | Solution                                   | Coverage      | Notes                                                                    |
-| ------------------------ | ------------------------------------------ | ------------- | ------------------------------------------------------------------------ |
-| In-app gestures          | `react-native-gesture-handler` (installed) | **Available** | Swipe, tap, long-press, pan. Full coverage.                              |
-| Lock screen              | **Custom Native Module**                   | **Custom**    | `DevicePolicyManager.lockNow()`. ~10 lines Kotlin.                       |
-| Open notifications panel | **Custom Native Module**                   | **Custom**    | `AccessibilityService.performGlobalAction(GLOBAL_ACTION_NOTIFICATIONS)`  |
-| Open quick settings      | **Custom Native Module**                   | **Custom**    | `AccessibilityService.performGlobalAction(GLOBAL_ACTION_QUICK_SETTINGS)` |
-| Open recent apps         | **Custom Native Module**                   | **Custom**    | `AccessibilityService.performGlobalAction(GLOBAL_ACTION_RECENTS)`        |
-| Power menu               | **Custom Native Module**                   | **Custom**    | `AccessibilityService.performGlobalAction(GLOBAL_ACTION_POWER_DIALOG)`   |
+| Feature                  | Solution                                            | Coverage | Notes                                                                                                                                                                                                               |
+| ------------------------ | --------------------------------------------------- | -------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| In-app gestures          | `react-native-gesture-handler` (installed)          | **Done** | 6 configurable gestures (swipe up/down/left/right, double tap, long press), 10 actions, directional panel animations, rubberband threshold, haptic feedback. Kvaesitso-style settings UI with action picker dialog. |
+| Lock screen              | `react-native-accessibility-actions` (Nitro module) | **Done** | Built as local Nitro module. Uses `AccessibilityService.GLOBAL_ACTION_LOCK_SCREEN`.                                                                                                                                 |
+| Open notifications panel | `react-native-accessibility-actions` (Nitro module) | **Done** | `AccessibilityService.performGlobalAction(GLOBAL_ACTION_NOTIFICATIONS)`                                                                                                                                             |
+| Open quick settings      | `react-native-accessibility-actions` (Nitro module) | **Done** | `AccessibilityService.performGlobalAction(GLOBAL_ACTION_QUICK_SETTINGS)`                                                                                                                                            |
+| Open recent apps         | `react-native-accessibility-actions` (Nitro module) | **Done** | `AccessibilityService.performGlobalAction(GLOBAL_ACTION_RECENTS)`                                                                                                                                                   |
+| Power menu               | `react-native-accessibility-actions` (Nitro module) | **Done** | `AccessibilityService.performGlobalAction(GLOBAL_ACTION_POWER_DIALOG)`                                                                                                                                              |
 
-**Consolidation:** All 5 system actions (lock, notifications, quick settings, recents, power menu) can be a single **AccessibilityService Expo module** that exposes `performGlobalAction(actionId)`.
+**Consolidation:** All 5 system actions are implemented in `packages/react-native-accessibility-actions` — a Nitro module (~80 lines Kotlin) with `HybridAccessibilityActions` exposing 7 methods including `isAccessibilityEnabled` and `openAccessibilitySettings()`.
 
 ### 7. INTEGRATIONS
 
@@ -224,17 +223,25 @@
 
 ## Implementation Priority Recommendation
 
-### Phase 1: Available packages (no native code)
+### ~~Phase 1: Available packages~~ — COMPLETE
 
-Install and wire: `expo-battery`, `expo-contacts`, `expo-calendar`, `expo-screen-orientation`, `expo-document-picker`, `expo-location`, `expo-media-library`, `mathjs`
+All available-package features are implemented: `expo-battery`, `expo-contacts`, `expo-calendar`, `expo-screen-orientation`, `expo-document-picker`, `expo-haptics`, `react-native-material-you-colors`, `expo-android-notification-listener-service`.
 
-### Phase 2: JS DIY features
+### ~~Phase 2: Core JS DIY features~~ — COMPLETE
 
-Build: Weather API integration, Wikipedia search, calculator, unit converter, icon shape masking, clock widgets, backup/restore
+Done: Weather API (Met.no), Wikipedia search, calculator, unit converter, icon shape masking, clock widgets (digital + analog), backup/restore, search quick actions (call, SMS, email, URL, create contact, set alarm, create calendar event), best match launch on Enter, gesture system with directional panels.
 
-### Phase 3: Custom native modules
+### Phase 3: Remaining JS DIY features
 
-Build the 3 Expo modules above. Start with `expo-accessibility-actions` (smallest), then `expo-notification-bridge`, then `expo-launcher-service` (largest).
+Build: Currency conversion (exchangerate-api.com), website URL lookup, hidden items, custom labels, tags for search items, item visibility levels, theme import/export, string normalization, OpenWeatherMap provider, Nextcloud integration, i18n.
+
+### Phase 4: Custom native modules
+
+Build the remaining 2 modules:
+
+1. ~~`expo-accessibility-actions`~~ — **DONE** (built as `react-native-accessibility-actions` Nitro module)
+2. `expo-notification-bridge` — Extend notification listener with media session reading + notification actions
+3. `expo-launcher-service` — Icon packs, adaptive icons, themed icons, work profile, app shortcuts (largest)
 
 ### Deprioritize
 

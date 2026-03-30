@@ -7,21 +7,23 @@ import {
   useWindowDimensions,
   View,
 } from "react-native";
-import { Gesture, GestureDetector } from "react-native-gesture-handler";
+import { GestureDetector } from "react-native-gesture-handler";
 import Animated, {
-  Easing,
-  interpolate,
-  runOnJS,
   useAnimatedReaction,
-  useAnimatedStyle,
   useSharedValue,
-  withTiming,
 } from "react-native-reanimated";
 import type { SharedValue } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { scheduleOnRN } from "react-native-worklets";
 
 import { WidgetConfigContext, WIDGET_SIZES } from "@/context/widget-config";
 import type { WidgetId, WidgetSize } from "@/context/widget-config";
+import { useDirectionalDismiss } from "@/hooks/use-directional-dismiss";
+import {
+  isHorizontal,
+  useDirectionalPanel,
+} from "@/hooks/use-directional-panel";
+import type { SlideFrom } from "@/hooks/use-directional-panel";
 
 import { BatteryWidget } from "./widgets/battery-widget";
 import { CalendarWidget } from "./widgets/calendar-widget";
@@ -29,10 +31,9 @@ import { ClockWidget } from "./widgets/clock-widget";
 import { MusicWidget } from "./widgets/music-widget";
 import { WeatherWidget } from "./widgets/weather-widget";
 
-const TIMING_CONFIG = { duration: 300, easing: Easing.out(Easing.cubic) };
-
 interface WidgetPanelProps {
-  translateY: SharedValue<number>;
+  offset: SharedValue<number>;
+  slideFrom: SharedValue<SlideFrom>;
 }
 
 const WIDGET_MAP: Record<
@@ -46,8 +47,11 @@ const WIDGET_MAP: Record<
   weather: WeatherWidget,
 };
 
-const WidgetPanel = function WidgetPanel({ translateY }: WidgetPanelProps) {
-  const { height: screenHeight } = useWindowDimensions();
+const WidgetPanel = function WidgetPanel({
+  offset,
+  slideFrom,
+}: WidgetPanelProps) {
+  const { height: screenHeight, width: screenWidth } = useWindowDimensions();
   const insets = useSafeAreaInsets();
   const widgetConfig = use(WidgetConfigContext);
   const scrollOffset = useSharedValue(0);
@@ -58,19 +62,24 @@ const WidgetPanel = function WidgetPanel({ translateY }: WidgetPanelProps) {
   }, []);
 
   useAnimatedReaction(
-    () => translateY.value > screenHeight - 10,
+    () => {
+      const size = isHorizontal(slideFrom.value) ? screenWidth : screenHeight;
+      return offset.value > size - 10;
+    },
     (isClosed, wasClosed) => {
       if (isClosed && !wasClosed) {
-        runOnJS(resetScrollPosition)();
+        scheduleOnRN(resetScrollPosition);
       }
     },
-    [screenHeight]
+    [screenHeight, screenWidth]
   );
 
-  const animatedStyle = useAnimatedStyle(() => ({
-    opacity: interpolate(translateY.value, [screenHeight, 0], [0, 1]),
-    transform: [{ translateY: translateY.value }],
-  }));
+  const { animatedStyle } = useDirectionalPanel({
+    offset,
+    screenHeight,
+    screenWidth,
+    slideFrom,
+  });
 
   const handleScroll = useCallback(
     (event: { nativeEvent: { contentOffset: { y: number } } }) => {
@@ -79,23 +88,13 @@ const WidgetPanel = function WidgetPanel({ translateY }: WidgetPanelProps) {
     [scrollOffset]
   );
 
-  const panGesture = Gesture.Pan()
-    .onUpdate((event) => {
-      "worklet";
-      if (scrollOffset.value <= 0 && event.translationY > 0) {
-        translateY.value = event.translationY;
-      }
-    })
-    .onEnd((event) => {
-      "worklet";
-      translateY.value = withTiming(
-        event.translationY > screenHeight * 0.25 || event.velocityY > 500
-          ? screenHeight
-          : 0,
-        TIMING_CONFIG
-      );
-    })
-    .activeOffsetY(10);
+  const panGesture = useDirectionalDismiss({
+    offset,
+    screenHeight,
+    screenWidth,
+    scrollOffset,
+    slideFrom,
+  });
 
   const [handleEditWidgets] = useState(() => () => {
     router.push("/widgets/edit" as const);
