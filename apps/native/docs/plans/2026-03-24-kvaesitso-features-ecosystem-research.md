@@ -8,11 +8,11 @@
 
 ## Summary
 
-| Coverage Level           | Count | Examples                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
-| ------------------------ | ----- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Done**                 | 57    | Search (7 providers), filter bar, ranking, quick actions (call, SMS, email, URL, create contact, set alarm, create calendar event), best match launch on Enter, backup, locale, weather, homescreen (clock, battery, charging, system bars), gestures (6 configurable gestures, 10 actions, directional panels, haptics), accessibility actions (lock screen, notifications, quick settings, recents, power menu), Material You dynamic colors, notification badges |
-| **Partial / JS DIY**     | 12    | Currency, file search, website lookup, tags, hidden items, i18n, custom labels, item visibility, string normalization, theme import/export, Nextcloud, OpenWeatherMap                                                                                                                                                                                                                                                                                               |
-| **Custom Native Module** | 5     | Media session, icon packs, adaptive icons, work profile, app shortcuts                                                                                                                                                                                                                                                                                                                                                                                              |
+| Coverage Level           | Count | Examples                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
+| ------------------------ | ----- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Done**                 | 66    | Search (9 providers incl. currency + website URL), filter bar, ranking, quick actions (call, SMS, email, URL, create contact, set alarm, start timer, create calendar event), best match launch on Enter, backup + theme import/export, locale, weather (Met.no + OpenWeatherMap), homescreen (clock, battery, charging, system bars), gestures (6 configurable, 10 actions, directional panels, haptics), accessibility actions (lock/notifications/quick settings/recents/power menu), Material You dynamic colors, notification badges, string normalization, custom labels in search, item visibility levels |
+| **Partial / JS DIY**     | 2     | Tags for search items, i18n                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
+| **Custom Native Module** | 5     | Media session, icon packs, adaptive icons, work profile, app shortcuts                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           |
 
 **Key insight:** Of the original 3 planned Expo modules, 1 is fully complete and 1 is partially done:
 
@@ -26,16 +26,16 @@
 
 ### 1. THEMING & APPEARANCE
 
-| Feature                       | Solution                                           | Coverage   | Notes                                                                                          |
-| ----------------------------- | -------------------------------------------------- | ---------- | ---------------------------------------------------------------------------------------------- |
-| Light/Dark/System theme       | `Uniwind.setTheme()` from `uniwind`                | **Done**   | Already implemented                                                                            |
-| Custom color schemes          | HeroUI Native CSS variables                        | **Done**   | Already implemented (3 presets)                                                                |
-| Material You / Dynamic Colors | `react-native-material-you-colors` (installed)     | **Done**   | "Material You" swatch in accent picker. Extracts system wallpaper color. Falls back to indigo. |
-| Theme import/export           | `expo-document-picker` + `expo-file-system` + JSON | **JS DIY** | Serialize settings to JSON file                                                                |
-| Accent color picker           | `useThemeOverrides()` context                      | **Done**   | Already implemented (14 swatches)                                                              |
-| Corner radius                 | `useThemeOverrides().cardRadius`                   | **Done**   | Already wired                                                                                  |
-| Font family                   | `expo-font` + Google Fonts                         | **Done**   | Already wired (4 options)                                                                      |
-| Transparency                  | `useThemeOverrides().transparency`                 | **Done**   | Already wired                                                                                  |
+| Feature                       | Solution                                           | Coverage | Notes                                                                                          |
+| ----------------------------- | -------------------------------------------------- | -------- | ---------------------------------------------------------------------------------------------- |
+| Light/Dark/System theme       | `Uniwind.setTheme()` from `uniwind`                | **Done** | Already implemented                                                                            |
+| Custom color schemes          | HeroUI Native CSS variables                        | **Done** | Already implemented (3 presets)                                                                |
+| Material You / Dynamic Colors | `react-native-material-you-colors` (installed)     | **Done** | "Material You" swatch in accent picker. Extracts system wallpaper color. Falls back to indigo. |
+| Theme import/export           | `expo-document-picker` + `expo-file-system` + JSON | **Done** | Theme + full settings export/import via expo-sharing. Validation on import.                    |
+| Accent color picker           | `useThemeOverrides()` context                      | **Done** | Already implemented (14 swatches)                                                              |
+| Corner radius                 | `useThemeOverrides().cardRadius`                   | **Done** | Already wired                                                                                  |
+| Font family                   | `expo-font` + Google Fonts                         | **Done** | Already wired (4 options)                                                                      |
+| Transparency                  | `useThemeOverrides().transparency`                 | **Done** | Already wired                                                                                  |
 
 ### 2. HOMESCREEN
 
@@ -55,37 +55,37 @@
 
 ### 3. ICONS & APP MANAGEMENT
 
-| Feature                          | Solution                                                                                                                                                                                        | Coverage   | Notes                                                                              |
-| -------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------- | ---------------------------------------------------------------------------------- |
-| List installed apps              | [`react-native-get-app-list`](https://github.com/aravind3566/react-native-get-app-list) or [`@zecky-dev/react-native-app-list`](https://www.npmjs.com/package/@zecky-dev/react-native-app-list) | **Done**   | Package names, app names, icons. Needs `QUERY_ALL_PACKAGES`. Dev client only.      |
-| Launch apps                      | [`react-native-send-intent`](https://github.com/lucasferreira/react-native-send-intent) or `expo-intent-launcher`                                                                               | **Done**   | `SendIntentAndroid.openApp('com.package.name')`.                                   |
-| App uninstall                    | Intent wrapper                                                                                                                                                                                  | **Done**   | `Intent.ACTION_UNINSTALL_PACKAGE`. Thin native bridge (~5 lines Kotlin).           |
-| Icon shape masking               | `react-native-svg` clipPath                                                                                                                                                                     | **Done**   | Define SVG clip paths for circle, squircle, teardrop, hexagon, etc.                |
-| Icon pack support (ADW/Nova)     | **Custom Native Module**                                                                                                                                                                        | **Custom** | Must query icon pack's `ContentProvider` / parse `appfilter.xml` in Kotlin.        |
-| Adaptive icon extraction         | **Custom Native Module**                                                                                                                                                                        | **Custom** | `AdaptiveIconDrawable` foreground/background layers not exposed by any RN package. |
-| Themed icons (Material You)      | **Custom Native Module**                                                                                                                                                                        | **Custom** | Requires `LauncherApps` + themed icon API. Part of the Launcher module.            |
-| Work profile apps                | **Custom Native Module**                                                                                                                                                                        | **Custom** | `CrossProfileApps` + `LauncherApps`. No RN bridge.                                 |
-| Grid layout (columns, icon size) | Pure RN (FlatList + flexbox)                                                                                                                                                                    | **Done**   | Standard layout work.                                                              |
+| Feature                          | Solution                                                                                                                                                                                        | Coverage          | Notes                                                                              |
+| -------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------- | ---------------------------------------------------------------------------------- |
+| List installed apps              | [`react-native-get-app-list`](https://github.com/aravind3566/react-native-get-app-list) or [`@zecky-dev/react-native-app-list`](https://www.npmjs.com/package/@zecky-dev/react-native-app-list) | **Done**          | Package names, app names, icons. Needs `QUERY_ALL_PACKAGES`. Dev client only.      |
+| Launch apps                      | [`react-native-send-intent`](https://github.com/lucasferreira/react-native-send-intent) or `expo-intent-launcher`                                                                               | **Done**          | `SendIntentAndroid.openApp('com.package.name')`.                                   |
+| App uninstall                    | Intent wrapper                                                                                                                                                                                  | **Done**          | `Intent.ACTION_UNINSTALL_PACKAGE`. Thin native bridge (~5 lines Kotlin).           |
+| Icon shape masking               | `react-native-svg` clipPath                                                                                                                                                                     | **Done**          | Define SVG clip paths for circle, squircle, teardrop, hexagon, etc.                |
+| Icon pack support (ADW/Nova)     | **Custom Native Module**                                                                                                                                                                        | **Custom**        | Must query icon pack's `ContentProvider` / parse `appfilter.xml` in Kotlin.        |
+| Adaptive icon extraction         | **Custom Native Module**                                                                                                                                                                        | **Custom**        | `AdaptiveIconDrawable` foreground/background layers not exposed by any RN package. |
+| Themed icons (Material You)      | **Custom Native Module**                                                                                                                                                                        | **Custom**        | Requires `LauncherApps` + themed icon API. Part of the Launcher module.            |
+| Work profile apps                | **Custom Native Module**                                                                                                                                                                        | **Deprioritized** | Not planned. `CrossProfileApps` + `LauncherApps`.                                  |
+| Grid layout (columns, icon size) | Pure RN (FlatList + flexbox)                                                                                                                                                                    | **Done**          | Standard layout work.                                                              |
 
 ### 4. SEARCH
 
 #### 4a. Search Providers
 
-| Feature                    | Solution                                                                         | Coverage    | Notes                                                                       |
-| -------------------------- | -------------------------------------------------------------------------------- | ----------- | --------------------------------------------------------------------------- |
-| App search                 | App list package (see above)                                                     | **Done**    | Wired with scoring + usage ranking.                                         |
-| Contact search             | [`expo-contacts`](https://docs.expo.dev/versions/latest/sdk/contacts/)           | **Done**    | Soft permission prompt. Expandable inline actions.                          |
-| Calendar search            | [`expo-calendar`](https://docs.expo.dev/versions/latest/sdk/calendar/)           | **Done**    | Soft permission prompt. Next 30 days.                                       |
-| File search (photos/media) | [`expo-media-library`](https://docs.expo.dev/versions/latest/sdk/media-library/) | **Partial** | Photos/videos/audio only. Not documents/downloads.                          |
-| File search (all files)    | **Custom module** or directory traversal                                         | **Partial** | `expo-file-system` can traverse dirs but no MediaStore query for documents. |
-| Calculator                 | `mathjs` (lazy loaded)                                                           | **Done**    | Math expressions + base conversion (HEX, OCT, BIN). Copy to clipboard.      |
-| Unit converter             | `mathjs` (lazy loaded)                                                           | **Done**    | Format: `5 inch to cm`. Copy to clipboard.                                  |
-| Currency conversion        | Free API (exchangerate-api.com)                                                  | **JS DIY**  | Simple fetch call. Part of unit converter in Kvaesitso.                     |
-| Wikipedia search           | `react-native-nitro-fetch` + MediaWiki API                                       | **Done**    | Network tier (500ms debounce). Opens in browser.                            |
-| Location/place search      | `react-native-nitro-fetch` + Nominatim API                                       | **Done**    | Network tier. Opportunistic GPS bias. Opens in maps.                        |
-| Website URL lookup         | `react-native-nitro-fetch` + HTML parsing                                        | **JS DIY**  | Extract title, description, favicon from URLs. Only with online filter.     |
-| App shortcuts              | **Custom Native Module**                                                         | **Custom**  | `ShortcutManager` not exposed by RN packages. Part of Launcher module.      |
-| Custom attributes search   | Pure RN (MMKV + local search)                                                    | **JS DIY**  | Search custom labels and tags applied to items.                             |
+| Feature                    | Solution                                                                         | Coverage    | Notes                                                                         |
+| -------------------------- | -------------------------------------------------------------------------------- | ----------- | ----------------------------------------------------------------------------- |
+| App search                 | App list package (see above)                                                     | **Done**    | Wired with scoring + usage ranking.                                           |
+| Contact search             | [`expo-contacts`](https://docs.expo.dev/versions/latest/sdk/contacts/)           | **Done**    | Soft permission prompt. Expandable inline actions.                            |
+| Calendar search            | [`expo-calendar`](https://docs.expo.dev/versions/latest/sdk/calendar/)           | **Done**    | Soft permission prompt. Next 30 days.                                         |
+| File search (photos/media) | [`expo-media-library`](https://docs.expo.dev/versions/latest/sdk/media-library/) | **Partial** | Photos/videos/audio only. Not documents/downloads.                            |
+| File search (all files)    | **Custom module** or directory traversal                                         | **Partial** | `expo-file-system` can traverse dirs but no MediaStore query for documents.   |
+| Calculator                 | `mathjs` (lazy loaded)                                                           | **Done**    | Math expressions + base conversion (HEX, OCT, BIN). Copy to clipboard.        |
+| Unit converter             | `mathjs` (lazy loaded)                                                           | **Done**    | Format: `5 inch to cm`. Copy to clipboard.                                    |
+| Currency conversion        | `react-native-nitro-fetch` + exchangerate-api.com                                | **Done**    | "100 USD to EUR" pattern. 1hr cache. Network tier. Copy to clipboard.         |
+| Wikipedia search           | `react-native-nitro-fetch` + MediaWiki API                                       | **Done**    | Network tier (500ms debounce). Opens in browser.                              |
+| Location/place search      | `react-native-nitro-fetch` + Nominatim API                                       | **Done**    | Network tier. Opportunistic GPS bias. Opens in maps.                          |
+| Website URL lookup         | `react-native-nitro-fetch` + HTML parsing                                        | **Done**    | Fetches title, description, favicon. Network tier. Opens in expo-web-browser. |
+| App shortcuts              | **Custom Native Module**                                                         | **Custom**  | `ShortcutManager` not exposed by RN packages. Part of Launcher module.        |
+| Custom attributes search   | Pure RN (MMKV + local search)                                                    | **Done**    | Aliases searchable in app provider. Tags still JS DIY.                        |
 
 #### 4b. Search Actions (Quick Actions on Query)
 
@@ -97,7 +97,7 @@
 | Open URL action       | `expo-linking` or `expo-web-browser`   | **Done**    | Trigger when query is a valid URL.                                             |
 | Create contact action | `expo-contacts`                        | **Done**    | Triggers when query matches phone/email. Opens native contact form pre-filled. |
 | Set alarm action      | `expo-intent-launcher`                 | **Done**    | Android only. Triggers on "8:30 AM", "alarm 7:00". Fires `SET_ALARM` intent.   |
-| Start timer action    | `expo-intent-launcher`                 | **Partial** | Android only. Trigger on timespan patterns like "5 min".                       |
+| Start timer action    | `expo-intent-launcher`                 | **Done**    | Android only. "5 min", "30 sec", "2h30m". Fires `SET_TIMER` intent.            |
 | Create calendar event | `expo-calendar`                        | **Done**    | Triggers on "meeting tomorrow", "lunch friday". Creates event via intent/API.  |
 | Web search action     | `expo-linking` (URL template)          | **Done**    | Configurable engine (Google/DuckDuckGo/Bing) in settings.                      |
 | App search action     | `expo-intent-launcher` (ACTION_SEARCH) | **Partial** | Android only. Launch in-app search for specific apps.                          |
@@ -105,26 +105,26 @@
 
 #### 4c. Search UI & Filtering
 
-| Feature                | Solution                        | Coverage   | Notes                                                                      |
-| ---------------------- | ------------------------------- | ---------- | -------------------------------------------------------------------------- |
-| Filter bar             | Pure RN (horizontal ScrollView) | **Done**   | Docked above keyboard. 5 categories + globe network toggle.                |
-| Filter badge indicator | Pure RN                         | **Done**   | Active filter highlighted with accent color.                               |
-| Category sections      | Pure RN (SectionList)           | **Done**   | Kvaesitso section order. Auto-expand when single filter active.            |
-| Best match / launch    | Pure RN                         | **Done**   | Enter/Go key launches first search result. Wired via `submitRef` pattern.  |
-| Network filter toggle  | Pure RN + MMKV                  | **Done**   | Globe icon in filter bar. Persists across sessions.                        |
-| Hidden items           | Pure RN (MMKV)                  | **JS DIY** | Items can be hidden from all views. Button to show hidden items in search. |
-| Custom labels          | Pure RN (MMKV)                  | **JS DIY** | Override display name for any searchable item.                             |
-| Tags                   | Pure RN (MMKV)                  | **JS DIY** | Tag items, search by tag, autocomplete, bulk edit.                         |
-| Item visibility levels | Pure RN (MMKV)                  | **JS DIY** | Default / SearchOnly / Hidden per item.                                    |
+| Feature                | Solution                        | Coverage   | Notes                                                                            |
+| ---------------------- | ------------------------------- | ---------- | -------------------------------------------------------------------------------- |
+| Filter bar             | Pure RN (horizontal ScrollView) | **Done**   | Docked above keyboard. 5 categories + globe network toggle.                      |
+| Filter badge indicator | Pure RN                         | **Done**   | Active filter highlighted with accent color.                                     |
+| Category sections      | Pure RN (SectionList)           | **Done**   | Kvaesitso section order. Auto-expand when single filter active.                  |
+| Best match / launch    | Pure RN                         | **Done**   | Enter/Go key launches first search result. Wired via `submitRef` pattern.        |
+| Network filter toggle  | Pure RN + MMKV                  | **Done**   | Globe icon in filter bar. Persists across sessions.                              |
+| Hidden items           | Pure RN (MMKV)                  | **Done**   | "Show Hidden Apps" button in drawer. Modal lists hidden apps with tap to unhide. |
+| Custom labels          | Pure RN (MMKV)                  | **Done**   | Aliases match in app search. Alias shown as title, original as subtitle.         |
+| Tags                   | Pure RN (MMKV)                  | **JS DIY** | Tag items, search by tag, autocomplete, bulk edit.                               |
+| Item visibility levels | Pure RN (MMKV)                  | **Done**   | Default/SearchOnly/Hidden per app. UI in edit sheet. Filters drawer + search.    |
 
 #### 4d. Search Ranking & Scoring
 
-| Feature              | Solution                    | Coverage    | Notes                                                            |
-| -------------------- | --------------------------- | ----------- | ---------------------------------------------------------------- |
-| Text match scoring   | Pure JS (string similarity) | **Done**    | 60% text score + 40% usage weight. matchScore() + scoreResult(). |
-| Usage-based ranking  | MMKV (launch counts)        | **Done**    | recordLaunch() on tap. Persisted in MMKV.                        |
-| Result deduplication | Pure JS (Set by key)        | **Done**    | Deduplicate across providers by unique item key.                 |
-| String normalization | Pure JS or ICU              | **Partial** | For language-specific matching (diacritics, transliteration).    |
+| Feature              | Solution                    | Coverage | Notes                                                              |
+| -------------------- | --------------------------- | -------- | ------------------------------------------------------------------ |
+| Text match scoring   | Pure JS (string similarity) | **Done** | 60% text score + 40% usage weight. matchScore() + scoreResult().   |
+| Usage-based ranking  | MMKV (launch counts)        | **Done** | recordLaunch() on tap. Persisted in MMKV.                          |
+| Result deduplication | Pure JS (Set by key)        | **Done** | Deduplicate across providers by unique item key.                   |
+| String normalization | Pure JS (NFD + regex)       | **Done** | Diacritics stripping via normalizeText(). Applied in matchScore(). |
 
 ### 5. NOTIFICATIONS & BADGES
 
@@ -149,13 +149,13 @@
 
 ### 7. INTEGRATIONS
 
-| Feature                  | Solution                                | Coverage   | Notes                                                |
-| ------------------------ | --------------------------------------- | ---------- | ---------------------------------------------------- |
-| Weather (Met.no)         | `react-native-nitro-fetch` + Met.no API | **Done**   | Free API, no key needed. Wired to weather widget.    |
-| Weather (OpenWeatherMap) | Direct `fetch()`                        | **JS DIY** | Needs free API key. Falls through to Met.no for now. |
-| Media session control    | **Custom Native Module**                | **Custom** | Part of NotificationListener module.                 |
-| Nextcloud/Owncloud       | WebDAV client (`webdav` npm) + REST API | **JS DIY** | Standard HTTP APIs.                                  |
-| Smartspacer              | **Custom Native Module**                | **Custom** | Android-specific SDK. Low priority.                  |
+| Feature                  | Solution                                | Coverage          | Notes                                                                       |
+| ------------------------ | --------------------------------------- | ----------------- | --------------------------------------------------------------------------- |
+| Weather (Met.no)         | `react-native-nitro-fetch` + Met.no API | **Done**          | Free API, no key needed. Wired to weather widget.                           |
+| Weather (OpenWeatherMap) | `react-native-nitro-fetch` + OWM API    | **Done**          | API key input in settings. Selector: OWM/Met.no/None. Falls back to Met.no. |
+| Media session control    | **Custom Native Module**                | **Custom**        | Part of NotificationListener module.                                        |
+| Nextcloud/Owncloud       | WebDAV client (`webdav` npm) + REST API | **Deprioritized** | Not planned.                                                                |
+| Smartspacer              | **Custom Native Module**                | **Custom**        | Android-specific SDK. Low priority.                                         |
 
 ### 8. BACKUP & DATA
 
@@ -231,9 +231,11 @@ All available-package features are implemented: `expo-battery`, `expo-contacts`,
 
 Done: Weather API (Met.no), Wikipedia search, calculator, unit converter, icon shape masking, clock widgets (digital + analog), backup/restore, search quick actions (call, SMS, email, URL, create contact, set alarm, create calendar event), best match launch on Enter, gesture system with directional panels.
 
-### Phase 3: Remaining JS DIY features
+### ~~Phase 3: Remaining JS DIY features~~ — MOSTLY COMPLETE
 
-Build: Currency conversion (exchangerate-api.com), website URL lookup, hidden items, custom labels, tags for search items, item visibility levels, theme import/export, string normalization, OpenWeatherMap provider, Nextcloud integration, i18n.
+Done: Currency conversion, website URL lookup, custom labels in search, item visibility levels, theme import/export, string normalization, OpenWeatherMap provider, start timer action.
+
+Remaining: Tags for search items, i18n (large effort). Nextcloud/Owncloud and work profile deprioritized (not planned).
 
 ### Phase 4: Custom native modules
 

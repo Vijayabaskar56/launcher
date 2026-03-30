@@ -88,6 +88,7 @@ export const ICON_MAP: Record<string, IoniconName> = {
   download: "download-outline",
   drag: "menu",
   eye: "eye",
+  eyeOff: "eye-off-outline",
   flash: "flash",
   grid: "grid",
   heart: "heart",

@@ -8,6 +8,8 @@ import {
   useState,
 } from "react";
 import {
+  Image,
+  Modal,
   Platform,
   Pressable,
   ScrollView,
@@ -357,6 +359,7 @@ export const AppDrawer = ({ offset, slideFrom }: AppDrawerProps) => {
   const [editorAppId, setEditorAppId] = useState<string | null>(null);
   const [editorFocusMode, setEditorFocusMode] =
     useState<DrawerEditorFocusMode | null>(null);
+  const [showHiddenApps, setShowHiddenApps] = useState(false);
 
   const searchQuery = useDeferredValue(search?.state.searchText.trim() ?? "");
   const normalizedSearchQuery = searchQuery.toLowerCase();
@@ -483,6 +486,9 @@ export const AppDrawer = ({ offset, slideFrom }: AppDrawerProps) => {
 
   const drawerVisibleApps = allApps.filter(
     (app) => app.visibility === "default"
+  );
+  const hiddenApps = sortAppsAlphabetically(
+    allApps.filter((app) => app.visibility === "hidden")
   );
   const sortedApps = sortAppsAlphabetically(drawerVisibleApps);
   const appByPkg = Object.fromEntries(
@@ -620,6 +626,21 @@ export const AppDrawer = ({ offset, slideFrom }: AppDrawerProps) => {
     [activeTagId, drawerActions]
   );
 
+  const handleUnhideApp = useCallback(
+    (packageName: string) => {
+      drawerActions?.setVisibility(packageName, "default");
+    },
+    [drawerActions]
+  );
+
+  const handleOpenHidden = useCallback(() => {
+    setShowHiddenApps(true);
+  }, []);
+
+  const handleCloseHidden = useCallback(() => {
+    setShowHiddenApps(false);
+  }, []);
+
   if (!config || !drawerMetadata || !search) {
     return null;
   }
@@ -689,6 +710,18 @@ export const AppDrawer = ({ offset, slideFrom }: AppDrawerProps) => {
                 onAppPress={handleAppPress}
                 iconRefs={iconRefs}
               />
+
+              {hiddenApps.length > 0 ? (
+                <Pressable
+                  onPress={handleOpenHidden}
+                  className="flex-row items-center bg-secondary border border-border rounded-2xl gap-2 px-4 py-3 min-h-[48px] justify-center"
+                >
+                  <Icon name={ICON_MAP.eyeOff} size={18} />
+                  <Text className="text-base font-bold text-foreground">
+                    Show Hidden Apps ({hiddenApps.length})
+                  </Text>
+                </Pressable>
+              ) : null}
             </ScrollView>
           )}
         </Animated.View>
@@ -716,6 +749,120 @@ export const AppDrawer = ({ offset, slideFrom }: AppDrawerProps) => {
         tags={orderedTags}
         visible={editorApp !== null}
       />
+
+      <Modal
+        visible={showHiddenApps}
+        transparent
+        animationType="fade"
+        onRequestClose={handleCloseHidden}
+        statusBarTranslucent
+      >
+        <Pressable
+          style={{
+            alignItems: "center",
+            backgroundColor: "rgba(0,0,0,0.6)",
+            flex: 1,
+            justifyContent: "center",
+            padding: 32,
+          }}
+          onPress={handleCloseHidden}
+        >
+          <Pressable
+            style={{
+              backgroundColor: "#1a1a2e",
+              borderCurve: "continuous",
+              borderRadius: 20,
+              maxHeight: "70%",
+              overflow: "hidden",
+              width: "100%",
+            }}
+          >
+            <View
+              style={{
+                gap: 4,
+                paddingBottom: 12,
+                paddingHorizontal: 24,
+                paddingTop: 24,
+              }}
+            >
+              <Text className="text-xl font-bold text-foreground">
+                Hidden Apps
+              </Text>
+              <Text className="text-sm text-muted-foreground">
+                Tap an app to unhide it
+              </Text>
+            </View>
+            <ScrollView
+              style={{ maxHeight: 400 }}
+              contentContainerStyle={{
+                paddingBottom: 20,
+                paddingHorizontal: 12,
+              }}
+              showsVerticalScrollIndicator={false}
+            >
+              {hiddenApps.map((app) => (
+                <Pressable
+                  key={app.packageName}
+                  onPress={() => handleUnhideApp(app.packageName)}
+                  style={({ pressed }) => ({
+                    alignItems: "center",
+                    borderRadius: 12,
+                    flexDirection: "row",
+                    gap: 12,
+                    opacity: pressed ? 0.7 : 1,
+                    paddingHorizontal: 12,
+                    paddingVertical: 10,
+                  })}
+                >
+                  {app.icon ? (
+                    <Image
+                      source={{ uri: app.icon }}
+                      style={{ borderRadius: 10, height: 40, width: 40 }}
+                    />
+                  ) : (
+                    <View
+                      style={{
+                        alignItems: "center",
+                        backgroundColor: "#6366f1",
+                        borderRadius: 10,
+                        height: 40,
+                        justifyContent: "center",
+                        width: 40,
+                      }}
+                    >
+                      <Text
+                        style={{
+                          color: "#fff",
+                          fontSize: 18,
+                          fontWeight: "700",
+                        }}
+                      >
+                        {app.displayLabel.charAt(0).toUpperCase()}
+                      </Text>
+                    </View>
+                  )}
+                  <View style={{ flex: 1 }}>
+                    <Text className="text-base font-medium text-foreground">
+                      {app.displayLabel}
+                    </Text>
+                    <Text className="text-xs text-muted-foreground">
+                      Tap to unhide
+                    </Text>
+                  </View>
+                  <Icon name={ICON_MAP.eye} size={20} />
+                </Pressable>
+              ))}
+              {hiddenApps.length === 0 ? (
+                <View style={{ alignItems: "center", padding: 24 }}>
+                  <Text className="text-sm text-muted-foreground">
+                    No hidden apps
+                  </Text>
+                </View>
+              ) : null}
+            </ScrollView>
+          </Pressable>
+        </Pressable>
+      </Modal>
     </>
   );
 };
