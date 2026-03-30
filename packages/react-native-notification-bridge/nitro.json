@@ -1,0 +1,20 @@
+{
+  "$schema": "https://nitro.margelo.com/nitro.schema.json",
+  "cxxNamespace": ["notificationbridge"],
+  "ios": {
+    "iosModuleName": "NitroNotificationBridge"
+  },
+  "android": {
+    "androidNamespace": ["notificationbridge"],
+    "androidCxxLibName": "NitroNotificationBridge"
+  },
+  "autolinking": {
+    "NotificationBridge": {
+      "android": {
+        "language": "kotlin",
+        "implementationClassName": "HybridNotificationBridge"
+      }
+    }
+  },
+  "ignorePaths": ["**/node_modules"]
+}

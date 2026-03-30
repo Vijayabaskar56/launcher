@@ -1,0 +1,20 @@
+{
+  "$schema": "https://nitro.margelo.com/nitro.schema.json",
+  "cxxNamespace": ["launcherservice"],
+  "ios": {
+    "iosModuleName": "NitroLauncherService"
+  },
+  "android": {
+    "androidNamespace": ["launcherservice"],
+    "androidCxxLibName": "NitroLauncherService"
+  },
+  "autolinking": {
+    "LauncherService": {
+      "android": {
+        "language": "kotlin",
+        "implementationClassName": "HybridLauncherService"
+      }
+    }
+  },
+  "ignorePaths": ["**/node_modules"]
+}

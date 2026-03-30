@@ -9,13 +9,9 @@ import {
 import { AppState, Platform } from "react-native";
 
 interface NotificationBadgesContextValue {
-  /** Map of packageName -> active notification count */
   badges: Record<string, number>;
-  /** Get the badge count for a specific package */
   getBadgeCount: (packageName: string) => number;
-  /** Whether notification listener permission is granted */
   hasPermission: boolean;
-  /** Open system settings to grant notification listener permission */
   requestPermission: () => void;
 }
 
@@ -33,6 +29,16 @@ interface NotificationEntry {
   key: string;
   packageName: string;
 }
+
+const getBridge = () => {
+  try {
+    // eslint-disable-next-line unicorn/prefer-module, node/global-require -- conditional native module loading
+    const { notificationBridge } = require("react-native-notification-bridge");
+    return notificationBridge;
+  } catch {
+    return null;
+  }
+};
 
 export const NotificationBadgesProvider = ({
   children,
@@ -53,94 +59,76 @@ export const NotificationBadgesProvider = ({
     setBadges(counts);
   }, []);
 
+  const registerCallbacks = useCallback(
+    (bridge: ReturnType<typeof getBridge>) => {
+      if (!bridge) {
+        return;
+      }
+
+      bridge.onNotificationPosted((packageName: string, key: string) => {
+        activeNotificationsRef.current.set(key, { key, packageName });
+        recalculateBadges();
+      });
+
+      bridge.onNotificationRemoved((key: string) => {
+        activeNotificationsRef.current.delete(key);
+        recalculateBadges();
+      });
+    },
+    [recalculateBadges]
+  );
+
   useEffect(() => {
     if (Platform.OS !== "android") {
       return;
     }
 
-    let subscription: { remove: () => void } | null = null;
-    let removedSubscription: { remove: () => void } | null = null;
+    const bridge = getBridge();
+    if (!bridge) {
+      return;
+    }
 
-    const setup = async () => {
-      try {
-        const module =
-          await import("expo-android-notification-listener-service");
-        const service = module.default;
+    const granted = bridge.isNotificationListenerEnabled;
+    setHasPermission(granted);
 
-        // Check initial permission state
-        const granted = service.isNotificationPermissionGranted();
-        setHasPermission(granted);
+    if (granted) {
+      registerCallbacks(bridge);
+    }
+  }, [registerCallbacks]);
 
-        if (!granted) {
-          return;
-        }
-
-        // Listen for new notifications
-        subscription = service.addListener(
-          "onNotificationReceived",
-          (event: { key: string; packageName: string }) => {
-            activeNotificationsRef.current.set(event.key, {
-              key: event.key,
-              packageName: event.packageName,
-            });
-            recalculateBadges();
-          }
-        );
-
-        // Listen for removed notifications
-        removedSubscription = service.addListener(
-          "onNotificationRemoved" as never,
-          (event: { key: string }) => {
-            activeNotificationsRef.current.delete(event.key);
-            recalculateBadges();
-          }
-        );
-      } catch {
-        // Native module not available (e.g. in Expo Go or web)
-      }
-    };
-
-    setup();
-
-    return () => {
-      subscription?.remove();
-      removedSubscription?.remove();
-    };
-  }, [recalculateBadges]);
-
-  // Re-check permission when app returns to foreground
+  // Re-check permission on foreground — re-register callbacks if newly granted
   useEffect(() => {
     if (Platform.OS !== "android") {
       return;
     }
 
-    const sub = AppState.addEventListener("change", async (state) => {
-      if (state === "active") {
-        try {
-          const module =
-            await import("expo-android-notification-listener-service");
-          const granted = module.default.isNotificationPermissionGranted();
-          setHasPermission(granted);
-        } catch {
-          // Native module not available
-        }
+    const sub = AppState.addEventListener("change", (state) => {
+      if (state !== "active") {
+        return;
       }
+
+      const bridge = getBridge();
+      if (!bridge) {
+        return;
+      }
+
+      const granted = bridge.isNotificationListenerEnabled;
+      setHasPermission((prev) => {
+        if (!prev && granted) {
+          registerCallbacks(bridge);
+        }
+        return granted;
+      });
     });
 
     return () => sub.remove();
-  }, []);
+  }, [registerCallbacks]);
 
-  const requestPermission = useCallback(async () => {
+  const requestPermission = useCallback(() => {
     if (Platform.OS !== "android") {
       return;
     }
-
-    try {
-      const module = await import("expo-android-notification-listener-service");
-      module.default.openNotificationListenerSettings();
-    } catch {
-      // Native module not available
-    }
+    getBridge()?.openNotificationListenerSettings();
   }, []);
 
   const getBadgeCount = useCallback(

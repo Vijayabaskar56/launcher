@@ -3,18 +3,9 @@ import {
   useCallback,
   useEffect,
   useMemo,
-  useRef,
   useState,
 } from "react";
 import { AppState, Platform } from "react-native";
-
-import { syncIconCache, getIconCache } from "@/lib/icon-cache";
-
-const sortByName = <T extends { appName: string }>(items: T[]): T[] => {
-  const copy = [...items];
-  copy.sort((a, b) => a.appName.localeCompare(b.appName));
-  return copy;
-};
 
 export interface InstalledApp {
   packageName: string;
@@ -26,7 +17,7 @@ export interface InstalledApp {
 interface AppListContextValue {
   apps: InstalledApp[];
   getApp: (packageName: string) => InstalledApp | undefined;
-  refresh: () => Promise<void>;
+  refresh: () => void;
   isLoading: boolean;
 }
 
@@ -34,10 +25,12 @@ export const AppListContext = createContext<AppListContextValue>({
   apps: [],
   getApp: (): InstalledApp | undefined => undefined,
   isLoading: true,
-  refresh: async () => {
+  refresh: () => {
     // no-op default
   },
 });
+
+const DEFAULT_ICON_SIZE = 192;
 
 export const AppListProvider = ({
   children,
@@ -46,9 +39,8 @@ export const AppListProvider = ({
 }) => {
   const [apps, setApps] = useState<InstalledApp[]>([]);
   const [isLoading, setIsLoading] = useState(true);
-  const appMapRef = useRef<Map<string, InstalledApp>>(new Map());
 
-  const refresh = useCallback(async () => {
+  const refresh = useCallback(() => {
     if (Platform.OS !== "android") {
       setApps([]);
       setIsLoading(false);
@@ -56,63 +48,40 @@ export const AppListProvider = ({
     }
 
     try {
-      // Dynamic import — only available on Android with native module
-      const { getInstalledApps } = await import("react-native-get-app-list");
-      const result = await getInstalledApps();
+      // eslint-disable-next-line unicorn/prefer-module, node/global-require -- conditional native module loading
+      const { launcherService } = require("react-native-launcher-service");
 
-      // Transform raw results
-      const rawApps = result.map(
-        (app: { packageName: string; appName: string; icon?: string }) => ({
-          appName: app.appName,
-          icon: app.icon ? `data:image/png;base64,${app.icon}` : null,
-          letter: app.appName.charAt(0).toUpperCase(),
-          packageName: app.packageName,
-        })
+      const appInfos = launcherService.getInstalledApps();
+
+      const installedApps: InstalledApp[] = appInfos.map(
+        (app: { packageName: string; appName: string }) => {
+          const iconPath = launcherService.getAppIcon(
+            app.packageName,
+            DEFAULT_ICON_SIZE,
+            false
+          );
+
+          return {
+            appName: app.appName,
+            icon: iconPath ? `file://${iconPath}` : null,
+            letter: app.appName.charAt(0).toUpperCase(),
+            packageName: app.packageName,
+          };
+        }
       );
-
-      // Sync icon cache — adds new, removes uninstalled
-      const cache = syncIconCache(rawApps);
-
-      // Build final app list with cached icons
-      const installedApps: InstalledApp[] = sortByName(
-        rawApps.map((app: InstalledApp) => ({
-          ...app,
-          icon: app.icon ?? cache[app.packageName] ?? null,
-        }))
-      );
-
-      // Build lookup map
-      const map = new Map<string, InstalledApp>();
-      for (const app of installedApps) {
-        map.set(app.packageName, app);
-      }
-      appMapRef.current = map;
 
       setApps(installedApps);
     } catch {
-      // If the native module isn't available, try loading from cache
-      const cache = getIconCache();
-      const cachedApps: InstalledApp[] = sortByName(
-        Object.entries(cache).map(([packageName, icon]) => ({
-          appName: packageName.split(".").pop() ?? packageName,
-          icon,
-          letter: (packageName.split(".").pop() ?? "?").charAt(0).toUpperCase(),
-          packageName,
-        }))
-      );
-
-      setApps(cachedApps);
+      setApps([]);
     } finally {
       setIsLoading(false);
     }
   }, []);
 
-  // Initial load
   useEffect(() => {
     refresh();
   }, [refresh]);
 
-  // Re-fetch when app comes to foreground
   useEffect(() => {
     const sub = AppState.addEventListener("change", (state) => {
       if (state === "active") {
@@ -122,9 +91,14 @@ export const AppListProvider = ({
     return () => sub.remove();
   }, [refresh]);
 
+  const appMap = useMemo(
+    () => new Map(apps.map((a) => [a.packageName, a])),
+    [apps]
+  );
+
   const getApp = useCallback(
-    (packageName: string) => appMapRef.current.get(packageName),
-    []
+    (packageName: string) => appMap.get(packageName),
+    [appMap]
   );
 
   const value = useMemo(
