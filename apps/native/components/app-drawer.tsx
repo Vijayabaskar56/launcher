@@ -1,9 +1,11 @@
 import { openApplication } from "expo-intent-launcher";
+import { Card, CloseButton, Tabs } from "heroui-native";
 import {
   use,
   useCallback,
   useDeferredValue,
   useEffect,
+  useMemo,
   useRef,
   useState,
 } from "react";
@@ -12,13 +14,13 @@ import {
   Modal,
   Platform,
   Pressable,
-  ScrollView,
   Text,
   useWindowDimensions,
   Vibration,
   View,
 } from "react-native";
-import { GestureDetector } from "react-native-gesture-handler";
+import type { LayoutChangeEvent } from "react-native";
+import { GestureDetector, ScrollView } from "react-native-gesture-handler";
 import Animated, {
   useAnimatedReaction,
   useSharedValue,
@@ -43,11 +45,15 @@ import {
   useDirectionalPanel,
 } from "@/hooks/use-directional-panel";
 import type { SlideFrom } from "@/hooks/use-directional-panel";
+import { useScrollDismissHandoff } from "@/hooks/use-scroll-dismiss-handoff";
 import { useSearch } from "@/hooks/use-search";
 import { sortedSections } from "@/lib/search-service";
+import { sortItems } from "@/lib/sort";
+import type { IconShape } from "@/types/settings";
 
 import { AppDrawerActionMenu } from "./app-drawer/action-menu";
 import { AppDrawerEditSheet } from "./app-drawer/edit-sheet";
+import { FavoritesEditSheet } from "./app-drawer/favorites-edit-sheet";
 import type {
   DrawerActionMenuState,
   DrawerApp,
@@ -59,30 +65,15 @@ import { SearchResultsList } from "./search/search-results-list";
 import { Icon, ICON_MAP } from "./ui/icon";
 
 interface AppDrawerProps {
+  boundary?: {
+    isAtBottom: SharedValue<boolean>;
+    isAtTop: SharedValue<boolean>;
+  };
   offset: SharedValue<number>;
   slideFrom: SharedValue<SlideFrom>;
 }
 
-const sortItems = function sortItems<T>(
-  items: T[],
-  compare: (left: T, right: T) => number
-) {
-  const nextItems = [...items];
-
-  for (let index = 1; index < nextItems.length; index += 1) {
-    const item = nextItems[index];
-    let cursor = index - 1;
-
-    while (cursor >= 0 && compare(nextItems[cursor] as T, item as T) > 0) {
-      nextItems[cursor + 1] = nextItems[cursor] as T;
-      cursor -= 1;
-    }
-
-    nextItems[cursor + 1] = item as T;
-  }
-
-  return nextItems;
-};
+const ALL_PINNED_TAB = "__starred__";
 
 const sortAppsAlphabetically = (apps: DrawerApp[]) =>
   sortItems(apps, (left, right) =>
@@ -102,7 +93,7 @@ const DrawerAppIcon = ({
 }: {
   app: DrawerApp;
   isPinned: boolean;
-  iconShape: string;
+  iconShape: IconShape;
   showLabel: boolean;
   onPress: (packageName: string) => void;
   onLongPress: (app: DrawerApp) => void;
@@ -133,7 +124,7 @@ const DrawerAppIcon = ({
         label={app.displayLabel}
         letter={app.letter}
         icon={app.icon}
-        iconShape={iconShape as never}
+        iconShape={iconShape}
         showLabel={showLabel}
         onPress={handlePress}
         onLongPress={handleLongPress}
@@ -141,38 +132,6 @@ const DrawerAppIcon = ({
         ref={handleRef}
       />
     </View>
-  );
-};
-
-const TagPill = ({
-  tag,
-  isActive,
-  onTagPress,
-}: {
-  tag: DrawerTag;
-  isActive: boolean;
-  onTagPress: (tagId: string | null) => void;
-}) => {
-  const handlePress = useCallback(() => {
-    onTagPress(isActive ? null : tag.id);
-  }, [onTagPress, isActive, tag.id]);
-
-  return (
-    <Pressable
-      className={`rounded-full px-3.5 py-2.5 border flex-row items-center gap-1.5 ${
-        isActive ? "bg-primary border-primary" : "bg-secondary border-border"
-      }`}
-      onPress={handlePress}
-    >
-      <Icon name={ICON_MAP.tag} size={14} />
-      <Text
-        className={`text-sm font-semibold ${
-          isActive ? "text-primary-foreground" : "text-foreground"
-        }`}
-      >
-        {tag.label}
-      </Text>
-    </Pressable>
   );
 };
 
@@ -185,6 +144,7 @@ const PinnedSection = ({
   showLabels,
   onAppLongPress,
   onAppPress,
+  onEditPress,
   onTagPress,
   tags,
   iconRefs,
@@ -193,62 +153,30 @@ const PinnedSection = ({
   apps: DrawerApp[];
   columns: number;
   iconSize: number;
-  iconShape: string;
+  iconShape: IconShape;
   showLabels: boolean;
   onAppLongPress: (app: DrawerApp) => void;
   onAppPress: (packageName: string) => void;
+  onEditPress: () => void;
   onTagPress: (tagId: string | null) => void;
   tags: DrawerTag[];
   iconRefs: React.MutableRefObject<Map<string, View | null>>;
 }) => {
-  const handleAllPress = useCallback(() => {
-    onTagPress(null);
-  }, [onTagPress]);
+  const handleValueChange = useCallback(
+    (value: string) => {
+      onTagPress(value === ALL_PINNED_TAB ? null : value);
+    },
+    [onTagPress]
+  );
 
   return (
-    <View className="gap-3">
-      <View className="gap-1">
-        <Text className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
-          Favorites
-        </Text>
-        <Text className="text-xl font-extrabold text-foreground">
-          Pinned apps
-        </Text>
-      </View>
-
-      <View className="flex-row flex-wrap gap-2">
-        <Pressable
-          className={`rounded-full px-3.5 py-2.5 border flex-row items-center gap-1.5 ${
-            activeTagId === null
-              ? "bg-primary border-primary"
-              : "bg-secondary border-border"
-          }`}
-          onPress={handleAllPress}
-        >
-          <Icon name={ICON_MAP.star} size={14} />
-          <Text
-            className={`text-sm font-semibold ${
-              activeTagId === null
-                ? "text-primary-foreground"
-                : "text-foreground"
-            }`}
-          >
-            All
-          </Text>
-        </Pressable>
-
-        {tags.map((tag) => (
-          <TagPill
-            key={tag.id}
-            tag={tag}
-            isActive={activeTagId === tag.id}
-            onTagPress={onTagPress}
-          />
-        ))}
-      </View>
-
+    <Card
+      variant="transparent"
+      className="rounded-3xl p-4 gap-3"
+      style={{ backgroundColor: "rgba(0,0,0,0.4)" }}
+    >
       {apps.length > 0 ? (
-        <View className="flex-row flex-wrap -mx-1 gap-y-3">
+        <View className="flex-row flex-wrap gap-y-3">
           {apps.map((app) => (
             <DrawerAppIcon
               key={app.packageName}
@@ -265,17 +193,81 @@ const PinnedSection = ({
           ))}
         </View>
       ) : (
-        <View className="bg-card border border-border rounded-2xl gap-1 p-4">
+        <View className="gap-1 py-2">
           <Text className="text-base font-bold text-foreground">
-            No pinned apps here yet
+            {activeTagId ? "No apps with this tag" : "No pinned apps yet"}
           </Text>
           <Text className="text-sm text-muted-foreground leading-5">
-            Long press any launcher app to pin it, or clear the active tag
-            filter to see all favorites again.
+            {activeTagId
+              ? "Tap the star to see all pinned apps, or long press an app to assign this tag."
+              : "Long press any app to pin it here."}
           </Text>
         </View>
       )}
-    </View>
+
+      <View className="flex-row items-center gap-2">
+        <Tabs
+          value={activeTagId ?? ALL_PINNED_TAB}
+          onValueChange={handleValueChange}
+          variant="primary"
+          className="flex-1"
+        >
+          <Tabs.List className="bg-transparent p-0">
+            <Tabs.ScrollView contentContainerClassName="gap-2">
+              <Tabs.Indicator className="hidden" />
+              <Tabs.Trigger
+                value={ALL_PINNED_TAB}
+                className="p-0 bg-transparent rounded-none"
+              >
+                {({ isSelected }) => (
+                  <View
+                    className={`rounded-full px-3 py-2 border items-center justify-center ${
+                      isSelected
+                        ? "bg-primary border-primary"
+                        : "bg-secondary border-border"
+                    }`}
+                  >
+                    <Icon name={ICON_MAP.star} size={14} />
+                  </View>
+                )}
+              </Tabs.Trigger>
+              {tags.map((tag) => (
+                <Tabs.Trigger
+                  key={tag.id}
+                  value={tag.id}
+                  className="p-0 bg-transparent rounded-none"
+                >
+                  {({ isSelected }) => (
+                    <View
+                      className={`rounded-full px-3 py-2 border flex-row items-center gap-1.5 ${
+                        isSelected
+                          ? "bg-primary border-primary"
+                          : "bg-secondary border-border"
+                      }`}
+                    >
+                      <Icon name={ICON_MAP.tag} size={14} />
+                      <Text
+                        className={`text-sm font-semibold ${
+                          isSelected
+                            ? "text-primary-foreground"
+                            : "text-foreground"
+                        }`}
+                      >
+                        {tag.label}
+                      </Text>
+                    </View>
+                  )}
+                </Tabs.Trigger>
+              ))}
+            </Tabs.ScrollView>
+          </Tabs.List>
+        </Tabs>
+
+        <CloseButton onPress={onEditPress}>
+          <Icon name={ICON_MAP.edit} size={14} />
+        </CloseButton>
+      </View>
+    </Card>
   );
 };
 
@@ -294,13 +286,17 @@ const LauncherSection = ({
   columns: number;
   emptyTitle: string;
   iconSize: number;
-  iconShape: string;
+  iconShape: IconShape;
   showLabels: boolean;
   onAppLongPress: (app: DrawerApp) => void;
   onAppPress: (packageName: string) => void;
   iconRefs: React.MutableRefObject<Map<string, View | null>>;
 }) => (
-  <View className="gap-4">
+  <Card
+    variant="transparent"
+    className="rounded-3xl p-4 gap-4"
+    style={{ backgroundColor: "rgba(0,0,0,0.4)" }}
+  >
     <View className="gap-1">
       <Text className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
         All apps
@@ -309,7 +305,7 @@ const LauncherSection = ({
     </View>
 
     {apps.length > 0 ? (
-      <View className="flex-row flex-wrap -mx-1 gap-y-4">
+      <View className="flex-row flex-wrap gap-y-4">
         {apps.map((app) => (
           <DrawerAppIcon
             key={app.packageName}
@@ -326,7 +322,7 @@ const LauncherSection = ({
         ))}
       </View>
     ) : (
-      <View className="bg-card border border-border rounded-2xl gap-1 p-4">
+      <View className="gap-1">
         <Text className="text-base font-bold text-foreground">
           {emptyTitle}
         </Text>
@@ -336,11 +332,75 @@ const LauncherSection = ({
         </Text>
       </View>
     )}
-  </View>
+  </Card>
 );
 
+const HiddenAppRow = ({
+  app,
+  onUnhide,
+}: {
+  app: DrawerApp;
+  onUnhide: (packageName: string) => void;
+}) => {
+  const handlePress = useCallback(() => {
+    onUnhide(app.packageName);
+  }, [app.packageName, onUnhide]);
+
+  const getStyle = useCallback(
+    ({ pressed }: { pressed: boolean }) => ({
+      alignItems: "center" as const,
+      borderRadius: 12,
+      flexDirection: "row" as const,
+      gap: 12,
+      opacity: pressed ? 0.7 : 1,
+      paddingHorizontal: 12,
+      paddingVertical: 10,
+    }),
+    []
+  );
+
+  return (
+    <Pressable onPress={handlePress} style={getStyle}>
+      {app.icon ? (
+        <Image
+          source={{ uri: app.icon }}
+          style={{ borderRadius: 10, height: 40, width: 40 }}
+        />
+      ) : (
+        <View
+          style={{
+            alignItems: "center",
+            backgroundColor: "#6366f1",
+            borderRadius: 10,
+            height: 40,
+            justifyContent: "center",
+            width: 40,
+          }}
+        >
+          <Text
+            style={{
+              color: "#fff",
+              fontSize: 18,
+              fontWeight: "700",
+            }}
+          >
+            {app.displayLabel.charAt(0).toUpperCase()}
+          </Text>
+        </View>
+      )}
+      <View style={{ flex: 1 }}>
+        <Text className="text-base font-medium text-foreground">
+          {app.displayLabel}
+        </Text>
+        <Text className="text-xs text-muted-foreground">Tap to unhide</Text>
+      </View>
+      <Icon name={ICON_MAP.eye} size={20} />
+    </Pressable>
+  );
+};
+
 // eslint-disable-next-line complexity
-export const AppDrawer = ({ offset, slideFrom }: AppDrawerProps) => {
+export const AppDrawer = ({ boundary, offset, slideFrom }: AppDrawerProps) => {
   const { height: screenHeight, width: screenWidth } = useWindowDimensions();
   const insets = useSafeAreaInsets();
   const config = use(LauncherConfigContext);
@@ -350,8 +410,16 @@ export const AppDrawer = ({ offset, slideFrom }: AppDrawerProps) => {
   const search = useSearchBar();
   const drawerActions = drawerMetadata?.actions;
   const columns = config?.state.gridColumns ?? 6;
-  const scrollOffset = useSharedValue(0);
+  const localIsAtTop = useSharedValue(true);
+  const localIsAtBottom = useSharedValue(true);
+  const panelIsAtTop = boundary?.isAtTop ?? localIsAtTop;
+  const panelIsAtBottom = boundary?.isAtBottom ?? localIsAtBottom;
   const scrollRef = useRef<ScrollView>(null);
+  const scrollContentHeightRef = useRef(0);
+  const scrollViewportHeightRef = useRef(0);
+  const lastScrollOffsetRef = useRef(0);
+  const { handleScrollGestureUpdate, scrollGesture } =
+    useScrollDismissHandoff();
   const [activeTagId, setActiveTagId] = useState<string | null>(null);
   const [actionMenu, setActionMenu] = useState<DrawerActionMenuState | null>(
     null
@@ -360,6 +428,7 @@ export const AppDrawer = ({ offset, slideFrom }: AppDrawerProps) => {
   const [editorFocusMode, setEditorFocusMode] =
     useState<DrawerEditorFocusMode | null>(null);
   const [showHiddenApps, setShowHiddenApps] = useState(false);
+  const [showFavoritesEdit, setShowFavoritesEdit] = useState(false);
 
   const searchQuery = useDeferredValue(search?.state.searchText.trim() ?? "");
   const normalizedSearchQuery = searchQuery.toLowerCase();
@@ -400,6 +469,17 @@ export const AppDrawer = ({ offset, slideFrom }: AppDrawerProps) => {
     }
   }, [search, handleSubmitSearch]);
 
+  useEffect(() => {
+    if (isSearching) {
+      if (!panelIsAtTop.value) {
+        panelIsAtTop.value = true;
+      }
+      if (!panelIsAtBottom.value) {
+        panelIsAtBottom.value = true;
+      }
+    }
+  }, [isSearching, panelIsAtBottom, panelIsAtTop]);
+
   const handleCloseActionMenu = useCallback(() => {
     setActionMenu(null);
   }, []);
@@ -407,26 +487,8 @@ export const AppDrawer = ({ offset, slideFrom }: AppDrawerProps) => {
   const handleCloseEditor = useCallback(() => {
     setEditorAppId(null);
     setEditorFocusMode(null);
-  }, []);
-
-  const resetScrollPosition = useCallback(() => {
-    scrollRef.current?.scrollTo({ animated: false, y: 0 });
-    handleCloseActionMenu();
-    handleCloseEditor();
-  }, [handleCloseActionMenu, handleCloseEditor]);
-
-  useAnimatedReaction(
-    () => {
-      const size = isHorizontal(slideFrom.value) ? screenWidth : screenHeight;
-      return offset.value > size - 10;
-    },
-    (isClosed, wasClosed) => {
-      if (isClosed && !wasClosed) {
-        scheduleOnRN(resetScrollPosition);
-      }
-    },
-    [screenHeight, screenWidth]
-  );
+    search?.actions.setHidden(false);
+  }, [search]);
 
   useEffect(() => {
     if (!drawerMetadata || !activeTagId) {
@@ -449,65 +511,133 @@ export const AppDrawer = ({ offset, slideFrom }: AppDrawerProps) => {
     slideFrom,
   });
 
+  const updateBoundaryFromScroll = useCallback(
+    (nextOffset: number) => {
+      lastScrollOffsetRef.current = nextOffset;
+      panelIsAtTop.value = nextOffset <= 1;
+
+      const viewportHeight = scrollViewportHeightRef.current;
+      const contentHeight = scrollContentHeightRef.current;
+      panelIsAtBottom.value =
+        contentHeight <= viewportHeight + 1 ||
+        nextOffset + viewportHeight >= contentHeight - 1;
+    },
+    [panelIsAtBottom, panelIsAtTop]
+  );
+
+  const resetScrollPosition = useCallback(() => {
+    scrollRef.current?.scrollTo({ animated: false, y: 0 });
+    updateBoundaryFromScroll(0);
+    handleCloseActionMenu();
+    handleCloseEditor();
+  }, [handleCloseActionMenu, handleCloseEditor, updateBoundaryFromScroll]);
+
+  useAnimatedReaction(
+    () => {
+      const size = isHorizontal(slideFrom.value) ? screenWidth : screenHeight;
+      return offset.value > size - 10;
+    },
+    (isClosed, wasClosed) => {
+      if (isClosed && !wasClosed) {
+        scheduleOnRN(resetScrollPosition);
+      }
+    },
+    [screenHeight, screenWidth]
+  );
+
   const handleScroll = useCallback(
     (event: { nativeEvent: { contentOffset: { y: number } } }) => {
-      scrollOffset.value = event.nativeEvent.contentOffset.y;
+      updateBoundaryFromScroll(event.nativeEvent.contentOffset.y);
     },
-    [scrollOffset]
+    [updateBoundaryFromScroll]
+  );
+
+  const handleScrollLayout = useCallback(
+    (event: LayoutChangeEvent) => {
+      scrollViewportHeightRef.current = event.nativeEvent.layout.height;
+      updateBoundaryFromScroll(lastScrollOffsetRef.current);
+    },
+    [updateBoundaryFromScroll]
+  );
+
+  const handleContentSizeChange = useCallback(
+    (_width: number, height: number) => {
+      scrollContentHeightRef.current = height;
+      updateBoundaryFromScroll(lastScrollOffsetRef.current);
+    },
+    [updateBoundaryFromScroll]
   );
 
   const panGesture = useDirectionalDismiss({
+    isAtBottom: panelIsAtBottom,
+    isAtTop: panelIsAtTop,
     offset,
     screenHeight,
     screenWidth,
-    scrollOffset,
+    scrollGesture,
     slideFrom,
   });
 
   const iconShape = settings?.state.icons.iconShape ?? "circle";
   const showLabels = settings?.state.icons.showLabels ?? true;
 
-  const allApps: DrawerApp[] = drawerMetadata
-    ? appList.apps.map((app) => {
-        const metadata = drawerMetadata.state.apps[app.packageName];
+  const allApps = useMemo<DrawerApp[]>(
+    () =>
+      drawerMetadata
+        ? appList.apps.map((app) => {
+            const metadata = drawerMetadata.state.apps[app.packageName];
 
-        return {
-          ...app,
-          alias: metadata?.alias,
-          displayLabel: getDisplayLabelForApp(app, drawerMetadata.state),
-          id: app.packageName,
-          isPinned: metadata?.isPinned ?? false,
-          pinnedOrder: metadata?.pinnedOrder,
-          tagIds: metadata?.tagIds ?? [],
-          visibility: metadata?.visibility ?? "default",
-        };
-      })
-    : [];
+            return {
+              ...app,
+              alias: metadata?.alias,
+              displayLabel: getDisplayLabelForApp(app, drawerMetadata.state),
+              id: app.packageName,
+              isPinned: metadata?.isPinned ?? false,
+              pinnedOrder: metadata?.pinnedOrder,
+              tagIds: metadata?.tagIds ?? [],
+              visibility: metadata?.visibility ?? "default",
+            };
+          })
+        : [],
+    [appList.apps, drawerMetadata]
+  );
 
-  const drawerVisibleApps = allApps.filter(
-    (app) => app.visibility === "default"
+  const { appByPkg, hiddenApps, sortedApps } = useMemo(() => {
+    const visible = allApps.filter((app) => app.visibility === "default");
+    return {
+      appByPkg: Object.fromEntries(
+        allApps.map((app) => [app.packageName, app])
+      ),
+      hiddenApps: sortAppsAlphabetically(
+        allApps.filter((app) => app.visibility === "hidden")
+      ),
+      sortedApps: sortAppsAlphabetically(visible),
+    };
+  }, [allApps]);
+
+  const orderedTags = useMemo(
+    () => (drawerMetadata ? getOrderedTags(drawerMetadata.state) : []),
+    [drawerMetadata]
   );
-  const hiddenApps = sortAppsAlphabetically(
-    allApps.filter((app) => app.visibility === "hidden")
+
+  const pinnedApps = useMemo(() => {
+    const orderedPinnedPkgs = drawerMetadata
+      ? getOrderedPinnedPackages(drawerMetadata.state)
+      : [];
+    return orderedPinnedPkgs.flatMap((pkg) => {
+      const app = appByPkg[pkg];
+      return app && app.visibility === "default" ? [app] : [];
+    });
+  }, [appByPkg, drawerMetadata]);
+
+  const filteredPinnedApps = useMemo(
+    () =>
+      activeTagId === null
+        ? pinnedApps
+        : pinnedApps.filter((app) => app.tagIds.includes(activeTagId)),
+    [activeTagId, pinnedApps]
   );
-  const sortedApps = sortAppsAlphabetically(drawerVisibleApps);
-  const appByPkg = Object.fromEntries(
-    allApps.map((app) => [app.packageName, app])
-  );
-  const orderedTags = drawerMetadata
-    ? getOrderedTags(drawerMetadata.state)
-    : [];
-  const orderedPinnedPkgs = drawerMetadata
-    ? getOrderedPinnedPackages(drawerMetadata.state)
-    : [];
-  const pinnedApps = orderedPinnedPkgs.flatMap((pkg) => {
-    const app = appByPkg[pkg];
-    return app && app.visibility === "default" ? [app] : [];
-  });
-  const filteredPinnedApps =
-    activeTagId === null
-      ? pinnedApps
-      : pinnedApps.filter((app) => app.tagIds.includes(activeTagId));
+
   const actionApp = actionMenu ? appByPkg[actionMenu.packageName] : null;
   const editorApp = editorAppId ? appByPkg[editorAppId] : null;
 
@@ -520,6 +650,23 @@ export const AppDrawer = ({ offset, slideFrom }: AppDrawerProps) => {
   const handleAppPress = useCallback((packageName: string) => {
     openApplication(packageName);
   }, []);
+
+  const handleOpenFavoritesEdit = useCallback(() => {
+    setShowFavoritesEdit(true);
+    search?.actions.setHidden(true);
+  }, [search]);
+
+  const handleCloseFavoritesEdit = useCallback(() => {
+    setShowFavoritesEdit(false);
+    search?.actions.setHidden(false);
+  }, [search]);
+
+  const handleTogglePinFromEdit = useCallback(
+    (packageName: string, isPinned: boolean) => {
+      drawerActions?.setPinned(packageName, isPinned);
+    },
+    [drawerActions]
+  );
 
   const handleAppLongPress = useCallback((app: DrawerApp) => {
     if (Platform.OS !== "web") {
@@ -553,8 +700,9 @@ export const AppDrawer = ({ offset, slideFrom }: AppDrawerProps) => {
 
       setEditorAppId(actionApp.packageName);
       setEditorFocusMode(focusMode);
+      search?.actions.setHidden(true);
     },
-    [actionApp]
+    [actionApp, search?.actions]
   );
 
   const handleOpenRename = useCallback(() => {
@@ -652,8 +800,8 @@ export const AppDrawer = ({ offset, slideFrom }: AppDrawerProps) => {
     <>
       <GestureDetector gesture={panGesture}>
         <Animated.View
-          className="absolute bottom-0 left-0 right-0 top-0 bg-background"
-          style={animatedStyle}
+          className="absolute bottom-0 left-0 right-0 top-0"
+          style={[{ backgroundColor: "rgba(0,0,0,0.65)" }, animatedStyle]}
         >
           {isSearching ? (
             <View className="flex-1" style={{ paddingTop: contentPaddingTop }}>
@@ -681,6 +829,11 @@ export const AppDrawer = ({ offset, slideFrom }: AppDrawerProps) => {
                 paddingTop: contentPaddingTop,
               }}
               keyboardShouldPersistTaps="handled"
+              onContentSizeChange={handleContentSizeChange}
+              onGestureUpdate_CAN_CAUSE_INFINITE_RERENDER={
+                handleScrollGestureUpdate
+              }
+              onLayout={handleScrollLayout}
               onScroll={handleScroll}
               scrollEventThrottle={16}
               showsVerticalScrollIndicator={false}
@@ -694,6 +847,7 @@ export const AppDrawer = ({ offset, slideFrom }: AppDrawerProps) => {
                 showLabels={showLabels}
                 onAppLongPress={handleAppLongPress}
                 onAppPress={handleAppPress}
+                onEditPress={handleOpenFavoritesEdit}
                 onTagPress={setActiveTagId}
                 tags={orderedTags}
                 iconRefs={iconRefs}
@@ -750,6 +904,20 @@ export const AppDrawer = ({ offset, slideFrom }: AppDrawerProps) => {
         visible={editorApp !== null}
       />
 
+      <FavoritesEditSheet
+        allApps={sortedApps}
+        iconShape={iconShape}
+        onClose={handleCloseFavoritesEdit}
+        onCreateTag={handleCreateTag}
+        onRemoveTag={handleRemoveTag}
+        onReorderPinnedApps={handleReorderPinnedApps}
+        onReorderTags={handleReorderTags}
+        onTogglePin={handleTogglePinFromEdit}
+        pinnedApps={pinnedApps}
+        tags={orderedTags}
+        visible={showFavoritesEdit}
+      />
+
       <Modal
         visible={showHiddenApps}
         transparent
@@ -801,56 +969,11 @@ export const AppDrawer = ({ offset, slideFrom }: AppDrawerProps) => {
               showsVerticalScrollIndicator={false}
             >
               {hiddenApps.map((app) => (
-                <Pressable
+                <HiddenAppRow
                   key={app.packageName}
-                  onPress={() => handleUnhideApp(app.packageName)}
-                  style={({ pressed }) => ({
-                    alignItems: "center",
-                    borderRadius: 12,
-                    flexDirection: "row",
-                    gap: 12,
-                    opacity: pressed ? 0.7 : 1,
-                    paddingHorizontal: 12,
-                    paddingVertical: 10,
-                  })}
-                >
-                  {app.icon ? (
-                    <Image
-                      source={{ uri: app.icon }}
-                      style={{ borderRadius: 10, height: 40, width: 40 }}
-                    />
-                  ) : (
-                    <View
-                      style={{
-                        alignItems: "center",
-                        backgroundColor: "#6366f1",
-                        borderRadius: 10,
-                        height: 40,
-                        justifyContent: "center",
-                        width: 40,
-                      }}
-                    >
-                      <Text
-                        style={{
-                          color: "#fff",
-                          fontSize: 18,
-                          fontWeight: "700",
-                        }}
-                      >
-                        {app.displayLabel.charAt(0).toUpperCase()}
-                      </Text>
-                    </View>
-                  )}
-                  <View style={{ flex: 1 }}>
-                    <Text className="text-base font-medium text-foreground">
-                      {app.displayLabel}
-                    </Text>
-                    <Text className="text-xs text-muted-foreground">
-                      Tap to unhide
-                    </Text>
-                  </View>
-                  <Icon name={ICON_MAP.eye} size={20} />
-                </Pressable>
+                  app={app}
+                  onUnhide={handleUnhideApp}
+                />
               ))}
               {hiddenApps.length === 0 ? (
                 <View style={{ alignItems: "center", padding: 24 }}>

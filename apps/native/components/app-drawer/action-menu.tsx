@@ -1,6 +1,8 @@
 import { BlurView } from "expo-blur";
+import { Separator } from "heroui-native";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
+  Image,
   Modal,
   Platform,
   Pressable,
@@ -10,6 +12,8 @@ import {
 } from "react-native";
 import Animated, {
   Easing,
+  FadeIn,
+  FadeOut,
   interpolate,
   runOnJS,
   useAnimatedStyle,
@@ -21,6 +25,42 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Icon, ICON_MAP } from "../ui/icon";
 import { ActionToolbar } from "./action-toolbar";
 import type { DrawerActionMenuState, DrawerApp, ToolbarAction } from "./types";
+
+const OverflowActionRow = ({
+  action,
+  onClose,
+}: {
+  action: ToolbarAction;
+  onClose: () => void;
+}) => {
+  const hasChildren = "children" in action;
+  const isDestructive = "destructive" in action && action.destructive;
+
+  const handlePress = useCallback(() => {
+    onClose();
+    if (!hasChildren) {
+      action.onPress();
+    }
+  }, [action, hasChildren, onClose]);
+
+  return (
+    <Pressable
+      accessibilityLabel={action.label}
+      className="flex-row items-center gap-3 px-4 py-3"
+      onPress={handlePress}
+    >
+      <Icon name={ICON_MAP[action.icon]} size={20} />
+      <Text
+        className={`flex-1 text-[15px] font-medium ${
+          isDestructive ? "text-danger" : "text-foreground"
+        }`}
+      >
+        {action.label}
+      </Text>
+      {hasChildren ? <Icon name={ICON_MAP.chevronRight} size={16} /> : null}
+    </Pressable>
+  );
+};
 
 interface AppDrawerActionMenuProps {
   app: DrawerApp | null;
@@ -64,6 +104,7 @@ export const AppDrawerActionMenu = ({
     menuState: DrawerActionMenuState;
   } | null>(null);
   const [cardHeight, setCardHeight] = useState(CARD_ESTIMATED_HEIGHT);
+  const [isOverflowOpen, setIsOverflowOpen] = useState(false);
   const closeReasonRef = useRef<"internal" | "external">("external");
   const pendingActionRef = useRef<(() => void) | null>(null);
   const menuKey =
@@ -74,6 +115,7 @@ export const AppDrawerActionMenu = ({
   const finalizeClose = useCallback(() => {
     setActiveSnapshot(null);
     setCardHeight(CARD_ESTIMATED_HEIGHT);
+    setIsOverflowOpen(false);
     if (closeReasonRef.current === "internal") {
       const pendingAction = pendingActionRef.current;
       pendingActionRef.current = null;
@@ -152,6 +194,7 @@ export const AppDrawerActionMenu = ({
   );
 
   const handleBackdropPress = useCallback(() => {
+    setIsOverflowOpen(false);
     handleRequestClose();
   }, [handleRequestClose]);
 
@@ -264,6 +307,16 @@ export const AppDrawerActionMenu = ({
     handleUninstall,
   ]);
 
+  const overflowActions = useMemo(() => actions.slice(3), [actions]);
+
+  const handleMorePress = useCallback(() => {
+    setIsOverflowOpen((prev) => !prev);
+  }, []);
+
+  const handleCloseOverflow = useCallback(() => {
+    setIsOverflowOpen(false);
+  }, []);
+
   const packageName = useMemo(() => {
     if (!activeSnapshot) {
       return "";
@@ -367,14 +420,16 @@ export const AppDrawerActionMenu = ({
     ],
   }));
 
+  const cardHeightRef = useRef(CARD_ESTIMATED_HEIGHT);
   const handleCardLayout = useCallback(
     (event: { nativeEvent: { layout: { height: number } } }) => {
       const nextHeight = event.nativeEvent.layout.height;
-      if (Math.abs(nextHeight - cardHeight) > 1) {
+      if (Math.abs(nextHeight - cardHeightRef.current) > 1) {
+        cardHeightRef.current = nextHeight;
         setCardHeight(nextHeight);
       }
     },
-    [cardHeight]
+    []
   );
 
   if (!activeSnapshot || !placement) {
@@ -425,38 +480,46 @@ export const AppDrawerActionMenu = ({
             }}
             tint="dark"
           />
-          <View className="absolute inset-0 bg-black/45" pointerEvents="none" />
-          <View className="gap-5 px-5 pb-5 pt-4" onLayout={handleCardLayout}>
-            <View className="flex-row items-start gap-4">
-              <View className="flex-1 gap-2 pt-1">
-                <View className="flex-row items-center gap-2">
-                  <Text className="flex-1 text-[28px] font-bold tracking-tight text-foreground">
-                    {activeSnapshot.app.displayLabel}
-                  </Text>
-                  {activeSnapshot.app.isPinned ? (
-                    <View className="rounded-full border border-primary/20 bg-primary/15 px-2.5 py-1">
-                      <Text className="text-[11px] font-semibold uppercase tracking-[1.4px] text-primary">
-                        Pinned
-                      </Text>
-                    </View>
-                  ) : null}
-                </View>
-
-                <Text className="text-sm leading-5 text-muted-foreground">
-                  Launcher app
+          <View
+            className="absolute inset-0"
+            pointerEvents="none"
+            style={{ backgroundColor: "rgba(30, 30, 30, 0.96)" }}
+          />
+          <View onLayout={handleCardLayout}>
+            <View className="flex-row items-center gap-4 px-5 pb-4 pt-4">
+              <View className="flex-1 gap-1">
+                <Text
+                  className="text-xl font-bold text-foreground"
+                  numberOfLines={1}
+                >
+                  {activeSnapshot.app.displayLabel}
                 </Text>
-                <Text className="text-sm leading-5 text-muted-foreground">
+                <Text
+                  className="text-[13px] leading-[18px] text-white/50"
+                  numberOfLines={1}
+                >
                   {packageName}
                 </Text>
               </View>
 
               <Animated.View
                 className="h-16 w-16 items-center justify-center rounded-full border border-white/10 bg-white/5"
-                style={iconStyle}
+                style={[{ overflow: "hidden" }, iconStyle]}
               >
-                <Text className="text-2xl font-bold text-foreground">
-                  {activeSnapshot.app.letter}
-                </Text>
+                {activeSnapshot.app.icon ? (
+                  <Image
+                    source={{ uri: activeSnapshot.app.icon }}
+                    style={{
+                      borderRadius: 32,
+                      height: 64,
+                      width: 64,
+                    }}
+                  />
+                ) : (
+                  <Text className="text-2xl font-bold text-foreground">
+                    {activeSnapshot.app.letter}
+                  </Text>
+                )}
                 {activeSnapshot.app.isPinned ? (
                   <View className="absolute -bottom-1 -right-1 h-6 w-6 items-center justify-center rounded-full bg-primary">
                     <Icon name={ICON_MAP.star} size={12} />
@@ -465,12 +528,46 @@ export const AppDrawerActionMenu = ({
               </Animated.View>
             </View>
 
-            <ActionToolbar
-              actions={actions}
-              onRequestClose={handleBackdropPress}
-            />
+            <Separator className="mx-4 bg-white/10" />
+
+            <View className="px-3 pb-2 pt-1">
+              <ActionToolbar
+                actions={actions}
+                onMorePress={handleMorePress}
+                onRequestClose={handleBackdropPress}
+              />
+            </View>
           </View>
         </Animated.View>
+
+        {isOverflowOpen ? (
+          <>
+            <Pressable
+              className="absolute inset-0"
+              onPress={handleCloseOverflow}
+            />
+            <Animated.View
+              entering={FadeIn.duration(120)}
+              exiting={FadeOut.duration(80)}
+              className="absolute rounded-2xl border border-white/15 py-1"
+              style={{
+                backgroundColor: "rgba(30, 30, 30, 0.96)",
+                boxShadow: "0px 12px 32px rgba(0, 0, 0, 0.5)",
+                right: CARD_HORIZONTAL_MARGIN + 8,
+                top: placement.top + cardHeight + 8,
+                width: 200,
+              }}
+            >
+              {overflowActions.map((action) => (
+                <OverflowActionRow
+                  key={action.id}
+                  action={action}
+                  onClose={handleCloseOverflow}
+                />
+              ))}
+            </Animated.View>
+          </>
+        ) : null}
       </View>
     </Modal>
   );

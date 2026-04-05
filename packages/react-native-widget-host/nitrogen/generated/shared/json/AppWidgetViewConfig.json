@@ -1,0 +1,12 @@
+{
+  "uiViewClassName": "AppWidgetView",
+  "supportsRawText": false,
+  "bubblingEventTypes": {},
+  "directEventTypes": {},
+  "validAttributes": {
+    "appWidgetId": true,
+    "widgetWidth": true,
+    "widgetHeight": true,
+    "hybridRef": true
+  }
+}

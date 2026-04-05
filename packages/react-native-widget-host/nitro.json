@@ -1,0 +1,30 @@
+{
+  "$schema": "https://nitro.margelo.com/nitro.schema.json",
+  "cxxNamespace": ["widgethost"],
+  "ios": {
+    "iosModuleName": "NitroWidgetHost"
+  },
+  "android": {
+    "androidNamespace": ["widgethost"],
+    "androidCxxLibName": "NitroWidgetHost"
+  },
+  "autolinking": {
+    "WidgetHostService": {
+      "android": {
+        "language": "kotlin",
+        "implementationClassName": "HybridWidgetHostService"
+      }
+    },
+    "AppWidgetView": {
+      "ios": {
+        "language": "swift",
+        "implementationClassName": "HybridAppWidgetView"
+      },
+      "android": {
+        "language": "kotlin",
+        "implementationClassName": "HybridAppWidgetView"
+      }
+    }
+  },
+  "ignorePaths": ["**/node_modules"]
+}
