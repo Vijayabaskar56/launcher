@@ -10,7 +10,7 @@ const OCT_PATTERN = /^0o[0-7]+$/i;
 
 export const evaluateBase = (
   candidate: SmartCalculatorCandidate
-): Promise<SmartCalculatorResult | null> => {
+): SmartCalculatorResult | null => {
   const normalized = candidate.normalizedQuery;
 
   if (

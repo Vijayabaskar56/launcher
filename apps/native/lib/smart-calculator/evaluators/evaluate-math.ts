@@ -55,7 +55,7 @@ const getFormattedMathValue = (value: unknown, math: MathModule): string => {
 
 export const evaluateMath = (
   candidate: SmartCalculatorCandidate
-): Promise<SmartCalculatorResult | null> => {
+): SmartCalculatorResult | null => {
   const math = getMath();
   const expression = normalizeMathExpression(candidate.rawQuery);
 
@@ -76,7 +76,7 @@ export const evaluateMath = (
     return createSmartCalculatorResult({
       copyValue: rawResult,
       input: candidate.rawQuery,
-      kind: PERCENTAGE_PATTERN.test(expression) ? "percentage" : "math",
+      kind: PERCENTAGE_PATTERN.test(candidate.rawQuery) ? "percentage" : "math",
       metadata: Number.isFinite(numericValue) ? { numericValue } : undefined,
       result: rawResult,
       score: 0.98,

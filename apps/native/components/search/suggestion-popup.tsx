@@ -202,7 +202,7 @@ export const SuggestionPopup = memo(function SuggestionPopup({
     >
       {suggestions.map((s) => (
         <SuggestionItem
-          key={`${s.type}-${s.label ?? s.type}`}
+          key={`${s.type}-${(s as { data: { id?: string } }).data.id ?? s.label ?? s.type}`}
           suggestion={s}
           onSelect={onSelect}
         />

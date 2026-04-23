@@ -15,7 +15,7 @@ const PURE_DURATION_PATTERN =
 const DATE_RELATIVE_PATTERN =
   /\b(in|ago|after|before|from now|today|tomorrow|yesterday|next|last)\b/i;
 const TIME_SIGNAL_PATTERN =
-  /(?:\b\d{1,2}:\d{2}\b|\b\d{1,2}\s*(?:am|pm)\b|\b(?:am|pm|noon|midnight|utc|gmt|ist|est|edt|cst|cdt|mst|mdt|pst|pdt)\b)/i;
+  /(?:\b\d{1,2}:\d{2}\b|\b\d{1,2}\s*(?:am|pm)\b|\b(?:am|pm|noon|midnight|now|utc|gmt|ist|est|edt|cst|cdt|mst|mdt|pst|pdt)\b)/i;
 
 const DURATION_MULTIPLIERS: Record<string, number> = {
   d: 24 * 60 * 60 * 1000,
@@ -86,20 +86,8 @@ const formatDurationResult = (durationMs: number): string =>
       unitDisplay: "short",
     });
 
-const inferChronoKind = (
-  query: string,
-  parsedDate: DateTime
-): SmartCalculatorKind => {
+const inferChronoKind = (query: string): SmartCalculatorKind => {
   if (TIME_SIGNAL_PATTERN.test(query)) {
-    return "time";
-  }
-
-  if (
-    DATE_RELATIVE_PATTERN.test(query) &&
-    (parsedDate.hour !== 0 ||
-      parsedDate.minute !== 0 ||
-      parsedDate.second !== 0)
-  ) {
     return "time";
   }
 
@@ -108,7 +96,7 @@ const inferChronoKind = (
 
 export const evaluateDateTime = (
   candidate: SmartCalculatorCandidate
-): Promise<SmartCalculatorResult | null> => {
+): SmartCalculatorResult | null => {
   const trimmed = candidate.rawQuery.trim();
   const lowerQuery = trimmed.toLowerCase();
 
@@ -143,7 +131,7 @@ export const evaluateDateTime = (
   const resolvedDate = DateTime.fromJSDate(parsedResult.start.date()).setLocale(
     locale
   );
-  const kind = inferChronoKind(lowerQuery, resolvedDate);
+  const kind = inferChronoKind(lowerQuery);
   const displayValue =
     kind === "time"
       ? resolvedDate.toLocaleString(DateTime.DATETIME_MED)

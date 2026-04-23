@@ -10,7 +10,7 @@ import type {
 
 type Evaluator = (
   candidate: SmartCalculatorCandidate
-) => Promise<SmartCalculatorResult | null>;
+) => SmartCalculatorResult | Promise<SmartCalculatorResult | null> | null;
 
 const EVALUATORS_BY_HINT: Record<
   SmartCalculatorCandidate["kindHint"],

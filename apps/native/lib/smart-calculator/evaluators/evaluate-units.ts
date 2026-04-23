@@ -99,7 +99,7 @@ const formatMathValue = (value: unknown, math: MathModule): string => {
 
 export const evaluateUnits = (
   candidate: SmartCalculatorCandidate
-): Promise<SmartCalculatorResult | null> => {
+): SmartCalculatorResult | null => {
   const math = getMath();
   const trimmed = candidate.rawQuery.trim();
   const conversionMatch = CONVERSION_PATTERN.exec(trimmed);
