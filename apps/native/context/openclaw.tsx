@@ -400,7 +400,7 @@ export const OpenClawProvider = ({
     };
     sync();
     const intervalId = setInterval(() => {
-      runSync();
+      sync();
     }, 1500);
 
     return () => {

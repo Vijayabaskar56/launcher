@@ -181,8 +181,8 @@ function useActionMenuController(
   }, [initialApp, initialState, openMenu]);
 
   return {
-    _animateClosed,
     activeSnapshot,
+    animateClosed,
     cardHeight,
     isOverflowOpen,
     openMenu,
@@ -207,7 +207,6 @@ export const AppDrawerActionMenu = Object.assign(
       const insets = useSafeAreaInsets();
       const {
         activeSnapshot,
-        _animateClosed,
         cardHeight,
         isOverflowOpen,
         openMenu,
