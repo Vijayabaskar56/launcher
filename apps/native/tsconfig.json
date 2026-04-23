@@ -5,7 +5,13 @@
     "jsx": "react-jsx",
     "baseUrl": ".",
     "paths": {
-      "@/*": ["*"]
+      "@/*": ["*"],
+      "react-native-openclaw-gateway": [
+        "../../packages/react-native-openclaw-gateway/src/index"
+      ],
+      "react-native-openclaw-gateway/*": [
+        "../../packages/react-native-openclaw-gateway/src/*"
+      ]
     }
   },
   "include": ["**/*.ts", "**/*.tsx", ".expo/types/**/*.ts", "expo-env.d.ts"]

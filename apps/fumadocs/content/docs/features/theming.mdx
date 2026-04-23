@@ -1,0 +1,120 @@
+---
+title: Theming
+description: Material You dynamic color, preset color schemes, and the Tailwind v4 + HeroUI Native token pipeline.
+---
+
+Theming combines three layers: Android's
+[Material You dynamic color](https://m3.material.io/styles/color/dynamic-color/overview)
+system, a set of curated presets, and the Tailwind v4 / Uniwind token
+pipeline that HeroUI Native consumes.
+
+## Light, dark, and system modes
+
+The top-level `appearance.colorMode` setting is `"light" | "dark" | "system"`.
+In system mode the mode follows Android's `Appearance` API. The active mode
+picks which variant block is applied to the CSS custom properties that back
+HeroUI Native's tokens, so every component — surfaces, text, borders,
+shadows — re-skins automatically.
+
+## Material You dynamic color
+
+`hooks/use-material-you-color.ts` extracts the device's accent color from the
+Material You system palette using `react-native-material-you-colors`. On
+Android 12+ the returned palette is sampled from the current wallpaper;
+on everything else the hook synthesizes a fallback palette from
+`#6366f1` (indigo-500). The primary color is the tone-40 swatch of
+`system_accent1`, which maps to the M3 "primary" role:
+
+```ts
+const palette = MaterialYou.getMaterialYouPalette(DEFAULT_ACCENT, "TONAL_SPOT");
+return palette.system_accent1[4] ?? DEFAULT_ACCENT;
+```
+
+`getMaterialYouAccentColor()` is a synchronous helper for non-hook contexts
+(e.g. module-scoped defaults). Both are wrapped in try/catch so the launcher
+never crashes if the native module is absent.
+
+In the accent picker, the sentinel `SYSTEM_ACCENT_VALUE` renders a special
+swatch with an `auto-awesome` icon. When selected, its resolved display color
+comes from `useMaterialYouColor()`, so the user sees their current wallpaper
+accent live.
+
+## Color scheme presets
+
+`app/settings/color-scheme/` is a two-screen stack:
+
+- **`index.tsx`** — a `RadioGroup` of `THEME_PRESETS` rendered as `SchemeCard`
+  items. Each card shows the preset name, a one-line description, and three
+  preview swatches. Selecting a preset writes `appearance.themePreset` and
+  routes to the detail page.
+- **`[id].tsx`** — an accent picker for the chosen preset. It grids every
+  `ACCENT_COLORS` value (plus the Material You sentinel) as 44 dp swatches
+  with selected-state borders and updates `appearance.accentColor` on tap.
+- **`_layout.tsx`** — a small expo-router stack with a placeholder "add"
+  button reserved for the future "custom themes" feature.
+
+## Token pipeline
+
+`global.css` imports Tailwind v4, Uniwind, and HeroUI Native styles, then
+defines extra variants under `@layer theme`:
+
+```css
+@import "tailwindcss";
+@import "uniwind";
+@import "heroui-native/styles";
+
+@layer theme {
+  :root {
+    @variant high-contrast-light {
+      /* ... */
+    }
+    @variant high-contrast-dark {
+      /* ... */
+    }
+    @variant bw-light {
+      /* ... */
+    }
+    @variant bw-dark {
+      /* ... */
+    }
+  }
+}
+```
+
+Each variant defines the full HeroUI Native token surface in `oklch()`:
+`--background`, `--foreground`, `--surface*`, `--overlay`, `--muted`,
+`--default`, `--accent`, `--field-*`, `--success` / `--warning` / `--danger`,
+`--segment`, `--border`, `--separator`, `--focus`, `--link`, and the three
+shadow tokens (`--surface-shadow`, `--overlay-shadow`, `--field-shadow`).
+
+- **High contrast** variants boost contrast ratios toward WCAG AAA with
+  stronger borders and deeper text/background separation.
+- **Black & white** variants zero out all chroma (`oklch(x 0 0)`) for a pure
+  grayscale look — the dark variant is true-black so it reads as AMOLED.
+
+The default light and dark themes ship untouched from `heroui-native/styles`.
+
+## HeroUI Native integration
+
+`HeroUINativeProvider` wraps the app in `app/_layout.tsx`. Components then
+pull tokens through `useThemeColor("foreground")` or
+`useThemeColor(["foreground", "muted", "surface"] as const)`, which returns
+the resolved color for the current mode and variant. `useThemeOverrides()`
+exposes a few extra design tokens (`fontFamily`, `cardRadius`, `smallRadius`)
+used by custom components like `SchemeCard` and `GestureActionSheet`.
+
+Because the tokens are plain CSS custom properties, Tailwind utility classes
+on React Native components (via Uniwind) like `bg-background` and
+`text-muted-foreground` resolve to the same values that HeroUI Native sees
+— swapping the color mode flips every class and every HeroUI component in
+lockstep.
+
+## Related files
+
+- `apps/native/app/settings/color-scheme/index.tsx`
+- `apps/native/app/settings/color-scheme/[id].tsx`
+- `apps/native/app/settings/color-scheme/_layout.tsx`
+- `apps/native/hooks/use-material-you-color.ts`
+- `apps/native/global.css`
+- `apps/native/docs/plans/2026-03-24-theme-color-scheme-implementation.md`
+- `apps/native/docs/plans/2026-03-23-kvaesitso-settings-ui-implementation.md`

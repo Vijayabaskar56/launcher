@@ -51,6 +51,7 @@ namespace margelo::nitro::launcherservice {
   public:
     // Properties
     bool getHasShortcutHostPermission() override;
+    bool getIsWallpaperBlurSupported() override;
 
   public:
     // Methods
@@ -62,6 +63,7 @@ namespace margelo::nitro::launcherservice {
     std::vector<AppShortcut> getShortcuts(const std::string& packageName) override;
     std::vector<AppShortcut> searchShortcuts(const std::string& query) override;
     void launchShortcut(const std::string& packageName, const std::string& shortcutId) override;
+    void setWallpaperBlurRadius(double radius) override;
 
   private:
     jni::global_ref<JHybridLauncherServiceSpec::JavaPart> _javaPart;

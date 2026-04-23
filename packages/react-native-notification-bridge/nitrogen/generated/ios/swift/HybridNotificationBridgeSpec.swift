@@ -11,6 +11,7 @@ import NitroModules
 public protocol HybridNotificationBridgeSpec_protocol: HybridObject {
   // Properties
   var isNotificationListenerEnabled: Bool { get }
+  var canSeek: Bool { get }
 
   // Methods
   func openNotificationListenerSettings() throws -> Void
@@ -18,8 +19,10 @@ public protocol HybridNotificationBridgeSpec_protocol: HybridObject {
   func onNotificationRemoved(callback: @escaping (_ key: String) -> Void) throws -> Void
   func onMediaMetadataChanged(callback: @escaping (_ metadata: MediaMetadata?) -> Void) throws -> Void
   func onPlaybackStateChanged(callback: @escaping (_ state: PlaybackState) -> Void) throws -> Void
+  func getPlaybackPosition() throws -> Double
   func play() throws -> Void
   func pause() throws -> Void
+  func seekTo(positionMs: Double) throws -> Void
   func skipToNext() throws -> Void
   func skipToPrevious() throws -> Void
 }

@@ -137,50 +137,12 @@ const SettingsGroup = ({ title, children }: SettingsGroupProps) => {
 
 const SettingsIndex = () => {
   const router = useRouter();
-
-  const handleAppearance = useCallback(() => {
-    router.push("/settings/appearance" as never);
-  }, [router]);
-
-  const handleHomescreen = useCallback(() => {
-    router.push("/settings/homescreen" as never);
-  }, [router]);
-
-  const handleIcons = useCallback(() => {
-    router.push("/settings/icons" as never);
-  }, [router]);
-
-  const handleSearch = useCallback(() => {
-    router.push("/settings/search" as never);
-  }, [router]);
-
-  const handleGestures = useCallback(() => {
-    router.push("/settings/gestures" as never);
-  }, [router]);
-
-  const handleIntegrations = useCallback(() => {
-    router.push("/settings/integrations" as never);
-  }, [router]);
-
-  const handlePlugins = useCallback(() => {
-    router.push("/settings/plugins" as never);
-  }, [router]);
-
-  const handleLocale = useCallback(() => {
-    router.push("/settings/locale" as never);
-  }, [router]);
-
-  const handleBackup = useCallback(() => {
-    router.push("/settings/backup" as never);
-  }, [router]);
-
-  const handleDebug = useCallback(() => {
-    router.push("/settings/debug" as never);
-  }, [router]);
-
-  const handleAbout = useCallback(() => {
-    router.push("/settings/about" as never);
-  }, [router]);
+  const navigateTo = useCallback(
+    (path: string) => () => {
+      router.push(path as never);
+    },
+    [router]
+  );
 
   return (
     <ScrollView
@@ -194,21 +156,21 @@ const SettingsIndex = () => {
           iconBg="#8B5CF6"
           title="Appearance"
           summary="Theme, colors, typography, shapes"
-          onPress={handleAppearance}
+          onPress={navigateTo("/settings/appearance")}
         />
         <SettingsItem
           icon="home"
           iconBg="#3B82F6"
           title="Homescreen"
           summary="Dock, widgets, search bar, wallpaper"
-          onPress={handleHomescreen}
+          onPress={navigateTo("/settings/homescreen")}
         />
         <SettingsItem
           icon="grid-view"
           iconBg="#06B6D4"
           title="Icons"
           summary="Shape, themed icons, icon packs"
-          onPress={handleIcons}
+          onPress={navigateTo("/settings/icons")}
           isLast
         />
       </SettingsGroup>
@@ -219,32 +181,39 @@ const SettingsIndex = () => {
           iconBg="#F59E0B"
           title="Search"
           summary="Providers, filters, ranking"
-          onPress={handleSearch}
+          onPress={navigateTo("/settings/search")}
         />
         <SettingsItem
           icon="gesture"
           iconBg="#EC4899"
           title="Gestures"
           summary="Swipe actions, taps"
-          onPress={handleGestures}
+          onPress={navigateTo("/settings/gestures")}
           isLast
         />
       </SettingsGroup>
 
       <SettingsGroup title="Connections">
         <SettingsItem
+          icon="forum"
+          iconBg="#14B8A6"
+          title="OpenClaw"
+          summary="Topic chat connection, trust, resume"
+          onPress={navigateTo("/settings/openclaw")}
+        />
+        <SettingsItem
           icon="extension"
           iconBg="#10B981"
           title="Integrations"
           summary="Weather, calendar, media"
-          onPress={handleIntegrations}
+          onPress={navigateTo("/settings/integrations")}
         />
         <SettingsItem
           icon="power"
           iconBg="#6366F1"
           title="Plugins"
           summary="Plugin management"
-          onPress={handlePlugins}
+          onPress={navigateTo("/settings/plugins")}
           isLast
         />
       </SettingsGroup>
@@ -255,28 +224,28 @@ const SettingsIndex = () => {
           iconBg="#F97316"
           title="Locale"
           summary="Language, time format"
-          onPress={handleLocale}
+          onPress={navigateTo("/settings/locale")}
         />
         <SettingsItem
           icon="cloud-upload"
           iconBg="#14B8A6"
           title="Backup"
           summary="Import/export theme and settings"
-          onPress={handleBackup}
+          onPress={navigateTo("/settings/backup")}
         />
         <SettingsItem
           icon="bug-report"
           iconBg="#EF4444"
           title="Debug"
           summary="Debug options"
-          onPress={handleDebug}
+          onPress={navigateTo("/settings/debug")}
         />
         <SettingsItem
           icon="info-outline"
           iconBg="#6B7280"
           title="About"
           summary="App info, licenses"
-          onPress={handleAbout}
+          onPress={navigateTo("/settings/about")}
           isLast
         />
       </SettingsGroup>

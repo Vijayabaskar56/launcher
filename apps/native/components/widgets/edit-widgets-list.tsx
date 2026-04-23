@@ -1,17 +1,21 @@
-import type { BottomSheetBackdropProps } from "@gorhom/bottom-sheet";
-import BottomSheet, {
-  BottomSheetBackdrop,
-  BottomSheetView,
-} from "@gorhom/bottom-sheet";
+import { TrueSheet } from "@lodev09/react-native-true-sheet";
+import { Card } from "heroui-native";
 import { memo, useCallback, use, useMemo, useRef, useState } from "react";
 import { Pressable, Text, useWindowDimensions, View } from "react-native";
 import Animated, { FadeOut } from "react-native-reanimated";
 import { Sortable, SortableItem } from "react-native-reanimated-dnd";
+import type { SortableRenderItemProps } from "react-native-reanimated-dnd";
 
-import { WidgetConfigContext, DEFAULT_WIDGETS } from "@/context/widget-config";
+import {
+  DEFAULT_WIDGETS,
+  isNativeWidgetId,
+  WidgetConfigContext,
+} from "@/context/widget-config";
 import type { WidgetId, WidgetSize } from "@/context/widget-config";
+import { toast } from "@/lib/toast";
 
 import { Icon, IconAccent, IconDanger, IconMuted, ICON_MAP } from "../ui/icon";
+import { AddWidgetSheet } from "./add-widget-sheet";
 
 const WIDGET_LABELS: Record<WidgetId, string> = Object.fromEntries(
   DEFAULT_WIDGETS.map((w) => [w.id, w.label])
@@ -59,13 +63,11 @@ const WidgetEditSheet = function WidgetEditSheet({
   widgetId,
   onClose,
 }: WidgetEditSheetProps) {
-  const bottomSheetRef = useRef<BottomSheet>(null);
+  const sheetRef = useRef<TrueSheet>(null);
   const widgetConfig = use(WidgetConfigContext);
   const currentSize = widgetId
     ? widgetConfig?.state.widgetSizes[widgetId]
     : "medium";
-
-  const snapPoints = useMemo(() => ["50%"], []);
 
   const handleSizeChange = useCallback(
     (size: WidgetSize) => {
@@ -89,56 +91,34 @@ const WidgetEditSheet = function WidgetEditSheet({
     [handleSizeChange]
   );
 
-  const handleSheetChange = useCallback(
-    (index: number) => {
-      if (index < 0) {
-        onClose();
-      }
-    },
-    [onClose]
-  );
-
-  const renderBackdrop = useCallback(
-    (props: BottomSheetBackdropProps) => (
-      <BottomSheetBackdrop
-        {...props}
-        disappearsOnIndex={-1}
-        appearsOnIndex={0}
-        opacity={0.5}
-      />
-    ),
-    []
-  );
-
   if (!widgetId) {
     return null;
   }
 
   return (
-    <BottomSheet
-      ref={bottomSheetRef}
-      index={0}
-      snapPoints={snapPoints}
-      enablePanDownToClose
-      backdropComponent={renderBackdrop}
-      onChange={handleSheetChange}
-      backgroundStyle={{
-        backgroundColor: "transparent",
-        borderTopLeftRadius: 28,
-        borderTopRightRadius: 28,
-      }}
-      handleIndicatorStyle={{
-        backgroundColor: "#e5e7eb",
-        borderRadius: 999,
-        height: 5,
-        width: 44,
-      }}
+    <TrueSheet
+      ref={sheetRef}
+      detents={[0.5]}
+      initialDetentIndex={0}
+      cornerRadius={28}
+      grabber
+      dimmed
+      onDidDismiss={onClose}
     >
-      <BottomSheetView className="gap-4 p-4">
+      <View className="gap-4 p-4">
         <View className="flex-row items-center justify-center gap-2">
-          <IconAccent name={ICON_MAP[WIDGET_ICONS[widgetId]]} size={24} />
+          <IconAccent
+            name={
+              isNativeWidgetId(widgetId)
+                ? ICON_MAP.grid
+                : ICON_MAP[WIDGET_ICONS[widgetId]]
+            }
+            size={24}
+          />
           <Text className="text-xl font-bold text-foreground">
-            {WIDGET_LABELS[widgetId]}
+            {isNativeWidgetId(widgetId)
+              ? (widgetConfig?.state.nativeWidgets[widgetId]?.label ?? "Widget")
+              : WIDGET_LABELS[widgetId]}
           </Text>
         </View>
         <View className="flex-row gap-2">
@@ -205,13 +185,15 @@ const WidgetEditSheet = function WidgetEditSheet({
             Done
           </Text>
         </Pressable>
-      </BottomSheetView>
-    </BottomSheet>
+      </View>
+    </TrueSheet>
   );
 };
 
 interface SortableWidgetItemProps {
   id: string;
+  label: string;
+  isNative: boolean;
   isAnimating: boolean;
   canRemove: boolean;
   onEditWidget: (id: WidgetId) => void;
@@ -221,6 +203,8 @@ interface SortableWidgetItemProps {
 
 const SortableWidgetItemContent = memo(function SortableWidgetItemContent({
   id,
+  label,
+  isNative,
   isAnimating,
   canRemove,
   onEditWidget,
@@ -241,16 +225,19 @@ const SortableWidgetItemContent = memo(function SortableWidgetItemContent({
       exiting={FadeOut.duration(150)}
       style={isAnimating ? { opacity: 0.3 } : undefined}
     >
-      <View className="flex-row items-center bg-card border border-border rounded-xl h-[68px] px-2">
+      <Card className="flex-row items-center rounded-xl h-[68px] px-2">
         <SortableItem.Handle>
           <View className="h-11 w-11 items-center justify-center">
             <IconMuted name={ICON_MAP.drag} size={20} />
           </View>
         </SortableItem.Handle>
         <View className="flex-1 flex-row items-center gap-4">
-          <IconAccent name={ICON_MAP[WIDGET_ICONS[widgetId]]} size={28} />
+          <IconAccent
+            name={isNative ? ICON_MAP.grid : ICON_MAP[WIDGET_ICONS[widgetId]]}
+            size={28}
+          />
           <Text className="text-base font-semibold text-foreground">
-            {WIDGET_LABELS[widgetId] ?? widgetId}
+            {label}
           </Text>
         </View>
         <Pressable
@@ -274,7 +261,7 @@ const SortableWidgetItemContent = memo(function SortableWidgetItemContent({
             />
           )}
         </Pressable>
-      </View>
+      </Card>
     </Animated.View>
   );
 });
@@ -284,6 +271,7 @@ export const EditWidgetsList = function EditWidgetsList() {
   const widgetConfig = use(WidgetConfigContext);
   const [animatingId, setAnimatingId] = useState<string | null>(null);
   const [editingWidgetId, setEditingWidgetId] = useState<WidgetId | null>(null);
+  const [showAddSheet, setShowAddSheet] = useState(false);
 
   const handleReorder = useCallback(
     (ids: string[]) => {
@@ -314,6 +302,43 @@ export const EditWidgetsList = function EditWidgetsList() {
     setEditingWidgetId(null);
   }, []);
 
+  const handleOpenAddSheet = useCallback(() => {
+    setShowAddSheet(true);
+  }, []);
+
+  const handleCloseAddSheet = useCallback(() => {
+    setShowAddSheet(false);
+  }, []);
+
+  const handleAddWidget = useCallback(
+    (id: WidgetId) => {
+      widgetConfig?.actions.addWidget(id);
+      setShowAddSheet(false);
+    },
+    [widgetConfig]
+  );
+
+  const handleAddNativeWidget = useCallback(
+    async (provider: string, label: string) => {
+      try {
+        // eslint-disable-next-line unicorn/prefer-module, node/global-require -- conditional native module loading
+        const { widgetHostService } = require("react-native-widget-host");
+        const appWidgetId =
+          await widgetHostService.allocateAndBindWidget(provider);
+
+        if (appWidgetId > 0) {
+          widgetConfig?.actions.addNativeWidget(appWidgetId, provider, label);
+          toast.success("Widget added", { description: label });
+        }
+      } catch {
+        toast.error("Couldn't add widget");
+      } finally {
+        setShowAddSheet(false);
+      }
+    },
+    [widgetConfig]
+  );
+
   const handleDrop = useCallback(
     (_: unknown, __: unknown, positions?: Record<string, number>) => {
       const orderedIds = getOrderedIdsFromPositions(positions);
@@ -328,25 +353,53 @@ export const EditWidgetsList = function EditWidgetsList() {
     ? widgetConfig.state.activeWidgetIds.length > 1
     : false;
 
+  const nativeWidgets = useMemo(
+    () => widgetConfig?.state.nativeWidgets ?? {},
+    [widgetConfig?.state.nativeWidgets]
+  );
+
+  const resolveLabel = useCallback(
+    (id: string): string => {
+      if (isNativeWidgetId(id)) {
+        return nativeWidgets[id]?.label ?? "Widget";
+      }
+      return WIDGET_LABELS[id as WidgetId] ?? id;
+    },
+    [nativeWidgets]
+  );
+
   const renderSortableItem = useCallback(
-    ({ id, ...rest }: { id: string }) => (
+    ({
+      id,
+      item,
+      ...sortableItemProps
+    }: SortableRenderItemProps<{ id: string }>) => (
       <SortableItem
-        key={id}
+        data={item}
         id={id}
-        data={{ id }}
+        key={id}
         onDrop={handleDrop}
-        {...rest}
+        {...sortableItemProps}
       >
         <SortableWidgetItemContent
+          canRemove={canRemove}
           id={id}
           isAnimating={animatingId === id}
-          canRemove={canRemove}
+          isNative={isNativeWidgetId(id)}
+          label={resolveLabel(id)}
           onEditWidget={handleEditWidget}
           onRemoveWidget={handleRemove}
         />
       </SortableItem>
     ),
-    [handleDrop, animatingId, canRemove, handleEditWidget, handleRemove]
+    [
+      handleDrop,
+      animatingId,
+      canRemove,
+      handleEditWidget,
+      handleRemove,
+      resolveLabel,
+    ]
   );
 
   if (!widgetConfig) {
@@ -370,7 +423,10 @@ export const EditWidgetsList = function EditWidgetsList() {
         style={{ height: screenHeight }}
       />
 
-      <Pressable className="flex-row items-center justify-center bg-secondary border border-border rounded-full h-[52px] mx-4 my-4 gap-2">
+      <Pressable
+        className="flex-row items-center justify-center bg-secondary border border-border rounded-full h-[52px] mx-4 my-4 gap-2"
+        onPress={handleOpenAddSheet}
+      >
         <Icon name={ICON_MAP.add} size={20} />
         <Text className="text-base font-semibold text-muted-foreground">
           Add Widget
@@ -381,6 +437,15 @@ export const EditWidgetsList = function EditWidgetsList() {
         widgetId={editingWidgetId}
         onClose={handleCloseEditSheet}
       />
+
+      {showAddSheet && (
+        <AddWidgetSheet
+          activeWidgetIds={activeWidgetIds}
+          onAdd={handleAddWidget}
+          onAddNative={handleAddNativeWidget}
+          onClose={handleCloseAddSheet}
+        />
+      )}
     </View>
   );
 };

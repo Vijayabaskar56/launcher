@@ -1,8 +1,8 @@
-import { CloseButton } from "heroui-native";
 import { useCallback, useMemo } from "react";
 import { View } from "react-native";
 
 import { Icon, ICON_MAP } from "../ui/icon";
+import { IconButton } from "../ui/icon-button";
 import type { ToolbarAction } from "./types";
 
 interface ActionToolbarProps {
@@ -22,9 +22,9 @@ const ToolbarButton = ({
   label: string;
   onPress: () => void;
 }) => (
-  <CloseButton onPress={onPress} accessibilityLabel={label}>
+  <IconButton onPress={onPress} accessibilityLabel={label}>
     <Icon name={ICON_MAP[icon]} size={22} />
-  </CloseButton>
+  </IconButton>
 );
 
 export const ActionToolbar = ({

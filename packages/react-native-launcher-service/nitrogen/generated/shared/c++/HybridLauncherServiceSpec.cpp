@@ -15,6 +15,7 @@ namespace margelo::nitro::launcherservice {
     // load custom methods/properties
     registerHybrids(this, [](Prototype& prototype) {
       prototype.registerHybridGetter("hasShortcutHostPermission", &HybridLauncherServiceSpec::getHasShortcutHostPermission);
+      prototype.registerHybridGetter("isWallpaperBlurSupported", &HybridLauncherServiceSpec::getIsWallpaperBlurSupported);
       prototype.registerHybridMethod("getInstalledApps", &HybridLauncherServiceSpec::getInstalledApps);
       prototype.registerHybridMethod("getAppIcon", &HybridLauncherServiceSpec::getAppIcon);
       prototype.registerHybridMethod("clearIconCache", &HybridLauncherServiceSpec::clearIconCache);
@@ -23,6 +24,7 @@ namespace margelo::nitro::launcherservice {
       prototype.registerHybridMethod("getShortcuts", &HybridLauncherServiceSpec::getShortcuts);
       prototype.registerHybridMethod("searchShortcuts", &HybridLauncherServiceSpec::searchShortcuts);
       prototype.registerHybridMethod("launchShortcut", &HybridLauncherServiceSpec::launchShortcut);
+      prototype.registerHybridMethod("setWallpaperBlurRadius", &HybridLauncherServiceSpec::setWallpaperBlurRadius);
     });
   }
 

@@ -1,10 +1,10 @@
 import { openApplication } from "expo-intent-launcher";
-import { Card, CloseButton, Tabs } from "heroui-native";
+import { useRouter } from "expo-router";
+import { Card, Tabs } from "heroui-native";
 import {
   use,
   useCallback,
   useDeferredValue,
-  useEffect,
   useMemo,
   useRef,
   useState,
@@ -27,7 +27,6 @@ import Animated, {
 } from "react-native-reanimated";
 import type { SharedValue } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { scheduleOnRN } from "react-native-worklets";
 
 import { AppListContext } from "@/context/app-list";
 import {
@@ -38,12 +37,10 @@ import {
 } from "@/context/drawer-metadata";
 import type { DrawerTag } from "@/context/drawer-metadata";
 import { LauncherConfigContext } from "@/context/launcher-config";
+import { useOpenClaw } from "@/context/openclaw";
 import { SettingsContext } from "@/context/settings";
 import { useDirectionalDismiss } from "@/hooks/use-directional-dismiss";
-import {
-  isHorizontal,
-  useDirectionalPanel,
-} from "@/hooks/use-directional-panel";
+import { useDirectionalPanel } from "@/hooks/use-directional-panel";
 import type { SlideFrom } from "@/hooks/use-directional-panel";
 import { useScrollDismissHandoff } from "@/hooks/use-scroll-dismiss-handoff";
 import { useSearch } from "@/hooks/use-search";
@@ -52,6 +49,7 @@ import { sortItems } from "@/lib/sort";
 import type { IconShape } from "@/types/settings";
 
 import { AppDrawerActionMenu } from "./app-drawer/action-menu";
+import type { ActionMenuHandle } from "./app-drawer/action-menu";
 import { AppDrawerEditSheet } from "./app-drawer/edit-sheet";
 import { FavoritesEditSheet } from "./app-drawer/favorites-edit-sheet";
 import type {
@@ -63,6 +61,7 @@ import { AppIcon } from "./app-icon";
 import { useSearchBar } from "./search-bar";
 import { SearchResultsList } from "./search/search-results-list";
 import { Icon, ICON_MAP } from "./ui/icon";
+import { IconButton } from "./ui/icon-button";
 
 interface AppDrawerProps {
   boundary?: {
@@ -170,11 +169,7 @@ const PinnedSection = ({
   );
 
   return (
-    <Card
-      variant="transparent"
-      className="rounded-3xl p-4 gap-3"
-      style={{ backgroundColor: "rgba(0,0,0,0.4)" }}
-    >
+    <Card variant="transparent" className="rounded-3xl p-4 gap-3 bg-surface/70">
       {apps.length > 0 ? (
         <View className="flex-row flex-wrap gap-y-3">
           {apps.map((app) => (
@@ -263,9 +258,9 @@ const PinnedSection = ({
           </Tabs.List>
         </Tabs>
 
-        <CloseButton onPress={onEditPress}>
+        <IconButton onPress={onEditPress} accessibilityLabel="Edit favorites">
           <Icon name={ICON_MAP.edit} size={14} />
-        </CloseButton>
+        </IconButton>
       </View>
     </Card>
   );
@@ -292,11 +287,7 @@ const LauncherSection = ({
   onAppPress: (packageName: string) => void;
   iconRefs: React.MutableRefObject<Map<string, View | null>>;
 }) => (
-  <Card
-    variant="transparent"
-    className="rounded-3xl p-4 gap-4"
-    style={{ backgroundColor: "rgba(0,0,0,0.4)" }}
-  >
+  <Card variant="transparent" className="rounded-3xl p-4 gap-4 bg-surface/70">
     <View className="gap-1">
       <Text className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
         All apps
@@ -368,9 +359,9 @@ const HiddenAppRow = ({
         />
       ) : (
         <View
+          className="bg-accent"
           style={{
             alignItems: "center",
-            backgroundColor: "#6366f1",
             borderRadius: 10,
             height: 40,
             justifyContent: "center",
@@ -378,8 +369,8 @@ const HiddenAppRow = ({
           }}
         >
           <Text
+            className="text-accent-foreground"
             style={{
-              color: "#fff",
               fontSize: 18,
               fontWeight: "700",
             }}
@@ -401,12 +392,14 @@ const HiddenAppRow = ({
 
 // eslint-disable-next-line complexity
 export const AppDrawer = ({ boundary, offset, slideFrom }: AppDrawerProps) => {
+  const router = useRouter();
   const { height: screenHeight, width: screenWidth } = useWindowDimensions();
   const insets = useSafeAreaInsets();
   const config = use(LauncherConfigContext);
   const appList = use(AppListContext);
   const drawerMetadata = use(DrawerMetadataContext);
   const settings = use(SettingsContext);
+  const openClaw = useOpenClaw();
   const search = useSearchBar();
   const drawerActions = drawerMetadata?.actions;
   const columns = config?.state.gridColumns ?? 6;
@@ -424,6 +417,7 @@ export const AppDrawer = ({ boundary, offset, slideFrom }: AppDrawerProps) => {
   const [actionMenu, setActionMenu] = useState<DrawerActionMenuState | null>(
     null
   );
+  const actionMenuRef = useRef<ActionMenuHandle>(null);
   const [editorAppId, setEditorAppId] = useState<string | null>(null);
   const [editorFocusMode, setEditorFocusMode] =
     useState<DrawerEditorFocusMode | null>(null);
@@ -436,15 +430,14 @@ export const AppDrawer = ({ boundary, offset, slideFrom }: AppDrawerProps) => {
 
   const searchResults = useSearch(searchQuery);
 
-  // Wire filter toggle ref so #filter suggestions can toggle search filters
-  useEffect(() => {
-    if (search?.filterToggleRef) {
-      search.filterToggleRef.current = searchResults.handleToggleFilter;
-    }
-  }, [search, searchResults.handleToggleFilter]);
+  if (search?.filterToggleRef) {
+    search.filterToggleRef.current = searchResults.handleToggleFilter;
+  }
 
   // Wire submit ref so pressing Enter launches the best match
   const handleSubmitSearch = useCallback(() => {
+    const trimmedQuery = searchQuery.trim();
+
     // Try the first result from the highest-priority section
     const sections = sortedSections(searchResults.results);
     if (sections.length > 0) {
@@ -456,32 +449,46 @@ export const AppDrawer = ({ boundary, offset, slideFrom }: AppDrawerProps) => {
       }
     }
 
-    // Fall back to the first quick action
-    const [firstAction] = searchResults.actions;
-    if (firstAction) {
-      firstAction.onPress();
+    const { activeTopicId } = openClaw;
+    if (trimmedQuery.length > 0) {
+      openClaw.actions.beginPendingResume({
+        autoSend: true,
+        message: trimmedQuery,
+        topicId: activeTopicId,
+      });
     }
-  }, [searchResults.results, searchResults.actions]);
 
-  useEffect(() => {
-    if (search?.submitRef) {
-      search.submitRef.current = handleSubmitSearch;
-    }
-  }, [search, handleSubmitSearch]);
+    search?.actions.deactivate();
 
-  useEffect(() => {
-    if (isSearching) {
-      if (!panelIsAtTop.value) {
-        panelIsAtTop.value = true;
-      }
-      if (!panelIsAtBottom.value) {
-        panelIsAtBottom.value = true;
-      }
+    if (openClaw.connectionStatus !== "connected") {
+      router.push("/settings/openclaw" as never);
+      return;
     }
-  }, [isSearching, panelIsAtBottom, panelIsAtTop]);
+
+    router.push(openClaw.getTopicChatPath(activeTopicId) as never);
+  }, [openClaw, router, search, searchQuery, searchResults.results]);
+
+  if (search?.submitRef) {
+    search.submitRef.current = handleSubmitSearch;
+  }
+
+  useAnimatedReaction(
+    () => isSearching,
+    (searching) => {
+      if (searching) {
+        if (!panelIsAtTop.value) {
+          panelIsAtTop.value = true;
+        }
+        if (!panelIsAtBottom.value) {
+          panelIsAtBottom.value = true;
+        }
+      }
+    },
+    [isSearching]
+  );
 
   const handleCloseActionMenu = useCallback(() => {
-    setActionMenu(null);
+    actionMenuRef.current?.requestClose();
   }, []);
 
   const handleCloseEditor = useCallback(() => {
@@ -490,18 +497,14 @@ export const AppDrawer = ({ boundary, offset, slideFrom }: AppDrawerProps) => {
     search?.actions.setHidden(false);
   }, [search]);
 
-  useEffect(() => {
+  const effectiveActiveTagId = useMemo(() => {
     if (!drawerMetadata || !activeTagId) {
-      return;
+      return null;
     }
-
     const tagStillExists = getOrderedTags(drawerMetadata.state).some(
       (tag) => tag.id === activeTagId
     );
-
-    if (!tagStillExists) {
-      setActiveTagId(null);
-    }
+    return tagStillExists ? activeTagId : null;
   }, [activeTagId, drawerMetadata]);
 
   const { animatedStyle } = useDirectionalPanel({
@@ -525,24 +528,19 @@ export const AppDrawer = ({ boundary, offset, slideFrom }: AppDrawerProps) => {
     [panelIsAtBottom, panelIsAtTop]
   );
 
-  const resetScrollPosition = useCallback(() => {
-    scrollRef.current?.scrollTo({ animated: false, y: 0 });
-    updateBoundaryFromScroll(0);
-    handleCloseActionMenu();
-    handleCloseEditor();
-  }, [handleCloseActionMenu, handleCloseEditor, updateBoundaryFromScroll]);
-
   useAnimatedReaction(
-    () => {
-      const size = isHorizontal(slideFrom.value) ? screenWidth : screenHeight;
-      return offset.value > size - 10;
-    },
-    (isClosed, wasClosed) => {
-      if (isClosed && !wasClosed) {
-        scheduleOnRN(resetScrollPosition);
+    () => isSearching,
+    (searching) => {
+      if (searching) {
+        if (!panelIsAtTop.value) {
+          panelIsAtTop.value = true;
+        }
+        if (!panelIsAtBottom.value) {
+          panelIsAtBottom.value = true;
+        }
       }
     },
-    [screenHeight, screenWidth]
+    [isSearching]
   );
 
   const handleScroll = useCallback(
@@ -632,10 +630,10 @@ export const AppDrawer = ({ boundary, offset, slideFrom }: AppDrawerProps) => {
 
   const filteredPinnedApps = useMemo(
     () =>
-      activeTagId === null
+      effectiveActiveTagId === null
         ? pinnedApps
-        : pinnedApps.filter((app) => app.tagIds.includes(activeTagId)),
-    [activeTagId, pinnedApps]
+        : pinnedApps.filter((app) => app.tagIds.includes(effectiveActiveTagId)),
+    [effectiveActiveTagId, pinnedApps]
   );
 
   const actionApp = actionMenu ? appByPkg[actionMenu.packageName] : null;
@@ -800,8 +798,8 @@ export const AppDrawer = ({ boundary, offset, slideFrom }: AppDrawerProps) => {
     <>
       <GestureDetector gesture={panGesture}>
         <Animated.View
-          className="absolute bottom-0 left-0 right-0 top-0"
-          style={[{ backgroundColor: "rgba(0,0,0,0.65)" }, animatedStyle]}
+          className="absolute bottom-0 left-0 right-0 top-0 bg-background/80"
+          style={[animatedStyle]}
         >
           {isSearching ? (
             <View className="flex-1" style={{ paddingTop: contentPaddingTop }}>
@@ -835,11 +833,12 @@ export const AppDrawer = ({ boundary, offset, slideFrom }: AppDrawerProps) => {
               }
               onLayout={handleScrollLayout}
               onScroll={handleScroll}
+              removeClippedSubviews
               scrollEventThrottle={16}
               showsVerticalScrollIndicator={false}
             >
               <PinnedSection
-                activeTagId={activeTagId}
+                activeTagId={effectiveActiveTagId}
                 apps={filteredPinnedApps}
                 columns={columns}
                 iconSize={iconSize}
@@ -882,6 +881,12 @@ export const AppDrawer = ({ boundary, offset, slideFrom }: AppDrawerProps) => {
       </GestureDetector>
 
       <AppDrawerActionMenu
+        ref={actionMenuRef}
+        key={
+          actionMenu && actionApp
+            ? `${actionApp.packageName}:${actionMenu.triggerBounds.x}:${actionMenu.triggerBounds.y}:${actionMenu.triggerBounds.width}:${actionMenu.triggerBounds.height}`
+            : undefined
+        }
         app={actionApp}
         menuState={actionMenu}
         onClose={handleCloseActionMenu}
@@ -926,9 +931,9 @@ export const AppDrawer = ({ boundary, offset, slideFrom }: AppDrawerProps) => {
         statusBarTranslucent
       >
         <Pressable
+          className="bg-background/60"
           style={{
             alignItems: "center",
-            backgroundColor: "rgba(0,0,0,0.6)",
             flex: 1,
             justifyContent: "center",
             padding: 32,
@@ -936,8 +941,8 @@ export const AppDrawer = ({ boundary, offset, slideFrom }: AppDrawerProps) => {
           onPress={handleCloseHidden}
         >
           <Pressable
+            className="bg-overlay"
             style={{
-              backgroundColor: "#1a1a2e",
               borderCurve: "continuous",
               borderRadius: 20,
               maxHeight: "70%",

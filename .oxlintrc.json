@@ -4,5 +4,18 @@
     "./node_modules/ultracite/config/oxlint/core/.oxlintrc.json",
     "./node_modules/ultracite/config/oxlint/react/.oxlintrc.json"
   ],
-  "ignorePatterns": ["**/routeTree.gen.ts"]
+  "ignorePatterns": [
+    "**/routeTree.gen.ts",
+    "**/.agents/skills/**",
+    "**/.claude/skills/**",
+    "skills-lock.json"
+  ],
+  "rules": {
+    "unicorn/no-array-sort": "off",
+    "func-style": "off",
+    "unicorn/filename-case": "off",
+    "prefer-destructuring": "off",
+    "unicorn/prefer-module": "off",
+    "react-perf/jsx-no-new-function-as-prop": "off"
+  }
 }

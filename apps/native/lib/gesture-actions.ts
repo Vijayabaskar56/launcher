@@ -58,31 +58,7 @@ export function executeGestureAction(
   }
   if (action === "lock-screen") {
     ctx.lockScreen();
-    return;
   }
-}
-
-// --- Animation Style Mapping ---
-
-export type GestureAnimationStyle = "rubberband" | "push" | "zoomIn" | "none";
-
-const animationStyleMap: Record<GestureAction, GestureAnimationStyle> = {
-  "app-drawer": "push",
-  "launch-app": "zoomIn",
-  "lock-screen": "zoomIn",
-  none: "none",
-  notifications: "rubberband",
-  "power-menu": "zoomIn",
-  "quick-settings": "rubberband",
-  recents: "push",
-  search: "push",
-  widgets: "rubberband",
-};
-
-export function getAnimationStyle(
-  action: GestureAction
-): GestureAnimationStyle {
-  return animationStyleMap[action];
 }
 
 // --- Permission Requirements ---
@@ -92,10 +68,8 @@ export interface ActionPermission {
   checkAvailable: () => boolean;
 }
 
-const isServiceEnabled = () => accessibilityActions.isAccessibilityEnabled;
-
 const accessibilityPermission: ActionPermission = {
-  checkAvailable: isServiceEnabled,
+  checkAvailable: accessibilityActions.isAccessibilityEnabled,
   description: "Requires Accessibility service",
 };
 

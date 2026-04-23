@@ -1,0 +1,127 @@
+---
+title: Launcher Service
+description: App list, icons, icon packs, shortcuts, and wallpaper blur — everything a launcher needs from PackageManager and LauncherApps.
+icon: AppWindow
+---
+
+`react-native-launcher-service` is the core native module that turns a React
+Native app into an actual Android launcher. It wraps Android's
+`PackageManager`, `LauncherApps`, and a handful of wallpaper APIs behind a
+single typed Nitro HybridObject.
+
+## Purpose
+
+The launcher needs to:
+
+- Enumerate installed apps that have a `LAUNCHER` intent category.
+- Load app icons at a requested size, honoring themed monochrome icons on
+  Android 13+.
+- Swap in third-party icon packs (ADW/Nova format).
+- Read static and dynamic app shortcuts (the long-press menu entries) via
+  `LauncherApps`.
+- Apply wallpaper blur behind the transparent launcher window (Kvaesitso
+  approach: the OS composites the wallpaper, we just ask for blur).
+
+## Install location
+
+Workspace package at `packages/react-native-launcher-service`, consumed by
+`apps/native` through the workspace protocol.
+
+## TypeScript API
+
+```ts
+import { launcherService } from "react-native-launcher-service";
+
+export interface AppInfo {
+  packageName: string;
+  appName: string;
+  activityName: string;
+}
+
+export interface IconPackInfo {
+  packageName: string;
+  label: string;
+}
+
+export interface AppShortcut {
+  id: string;
+  packageName: string;
+  shortLabel: string;
+  longLabel: string | undefined;
+  iconPath: string | undefined;
+}
+
+export interface LauncherService {
+  // App list
+  getInstalledApps(): AppInfo[];
+
+  // Icons
+  getAppIcon(
+    packageName: string,
+    size: number,
+    themed: boolean
+  ): string | undefined;
+  clearIconCache(): void;
+
+  // Icon packs
+  getInstalledIconPacks(): IconPackInfo[];
+  setActiveIconPack(packageName: string | undefined): void;
+
+  // Shortcuts
+  getShortcuts(packageName: string): AppShortcut[];
+  searchShortcuts(query: string): AppShortcut[];
+  launchShortcut(packageName: string, shortcutId: string): void;
+  readonly hasShortcutHostPermission: boolean;
+
+  // Wallpaper blur
+  setWallpaperBlurRadius(radius: number): void;
+  readonly isWallpaperBlurSupported: boolean;
+}
+```
+
+`getAppIcon` returns a file path (cached PNG) rather than raw bytes, so JS can
+hand it straight to an `<Image source={{ uri }} />`. Passing `themed: true`
+requests a monochrome themed icon where the launcher can tint it via
+`UserHandle`/`Themed Icons` on API 33+.
+
+## Android implementation notes
+
+The Kotlin side in `HybridLauncherService.kt` is a thin facade that delegates
+to four collaborators, each lazily constructed:
+
+- `AppListProvider` — queries `pm.queryIntentActivities()` for
+  `ACTION_MAIN` + `CATEGORY_LAUNCHER`, dedupes by package, and sorts
+  case-insensitively by label. This replaces the older
+  `react-native-get-app-list` dependency.
+- `IconProvider` — resolves the real drawable via `PackageManager`,
+  rasterizes to the requested size, writes to a cache directory, and returns
+  the file path. `clearIconCache()` wipes the directory (used after icon
+  pack changes).
+- `IconPackManager` — scans for installed ADW-compatible icon packs by
+  intent filter and remembers the active pack; `IconProvider` consults it
+  before falling back to the real app icon.
+- `ShortcutProvider` — wraps `LauncherApps.getShortcuts()` with a
+  `ShortcutQuery` for dynamic/static/manifest shortcuts and exposes
+  `launchShortcut()` / `startShortcut()`. `hasShortcutHostPermission` mirrors
+  `LauncherApps.hasShortcutHostPermission()`, which is only `true` when the
+  app is set as the user's default launcher.
+
+Wallpaper blur uses `Window.setBackgroundBlurRadius()` plus
+`FLAG_BLUR_BEHIND`, guarded by `Build.VERSION.SDK_INT >= 31`. The radius is
+converted from dp to px using the current display metrics, and the whole
+operation runs on the activity's UI thread.
+
+## Permissions & setup
+
+- Requires the Android `QUERY_ALL_PACKAGES` permission in the app manifest
+  for a complete app list on API 30+.
+- To read shortcuts, the app must be the **default launcher** — otherwise
+  `LauncherApps.hasShortcutHostPermission()` returns `false` and
+  `getShortcuts()` will yield nothing.
+- Wallpaper blur is silently ignored below API 31.
+
+## Planning doc
+
+Full implementation history, tradeoffs, and the replacement rationale for the
+older `react-native-get-app-list` and `rn-android-icons` dependencies live in:
+`apps/native/docs/plans/2026-03-30-launcher-service-implementation.md`.

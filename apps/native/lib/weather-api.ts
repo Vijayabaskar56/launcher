@@ -2,6 +2,19 @@ import { fetch } from "react-native-nitro-fetch";
 
 import type { WeatherProvider } from "@/types/settings";
 
+export interface HourlyForecast {
+  time: string;
+  temperature: number;
+  icon: WeatherIcon;
+}
+
+export interface DailyForecast {
+  day: string;
+  temperatureMin: number;
+  temperatureMax: number;
+  icon: WeatherIcon;
+}
+
 export interface WeatherData {
   temperature: number;
   temperatureHigh: number;
@@ -9,6 +22,11 @@ export interface WeatherData {
   condition: string;
   icon: WeatherIcon;
   location: string;
+  humidity: number;
+  windSpeed: number;
+  precipitation: number;
+  hourly: HourlyForecast[];
+  daily: DailyForecast[];
 }
 
 export type WeatherIcon =
@@ -23,19 +41,23 @@ export type WeatherIcon =
 // --- Met.no (free, no API key) ---
 
 interface MetNoTimeseries {
+  time: string;
   data: {
     instant: {
       details: {
         air_temperature: number;
+        relative_humidity?: number;
+        wind_speed?: number;
       };
     };
     next_1_hours?: {
       summary: { symbol_code: string };
+      details?: { precipitation_amount?: number };
     };
     next_6_hours?: {
       details: {
-        air_temperature_max: number;
-        air_temperature_min: number;
+        air_temperature_max?: number;
+        air_temperature_min?: number;
       };
       summary: { symbol_code: string };
     };
@@ -101,6 +123,52 @@ const mapMetNoCondition = (symbolCode: string): string => {
   return "Clear";
 };
 
+const buildDailyForecasts = (
+  series: MetNoTimeseries[],
+  nowTime: string
+): DailyForecast[] => {
+  const buckets = new Map<string, MetNoTimeseries[]>();
+  for (const entry of series) {
+    const d = new Date(entry.time);
+    const key = `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`;
+    const list = buckets.get(key) ?? [];
+    list.push(entry);
+    buckets.set(key, list);
+  }
+
+  const todayKey = (() => {
+    const d = new Date(nowTime);
+    return `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`;
+  })();
+  const DAY_NAMES = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+  const daily: DailyForecast[] = [];
+
+  for (const [key, entries] of buckets) {
+    if (key === todayKey) {
+      continue;
+    }
+    if (daily.length >= 3) {
+      break;
+    }
+    const dayTemps = entries.map((e) => e.data.instant.details.air_temperature);
+    const midday =
+      entries.find((e) => new Date(e.time).getHours() === 12) ?? entries[0];
+    const code =
+      midday.data.next_6_hours?.summary.symbol_code ??
+      midday.data.next_1_hours?.summary.symbol_code ??
+      "clearsky_day";
+    const date = new Date(entries[0].time);
+    daily.push({
+      day: DAY_NAMES[date.getDay()],
+      icon: mapMetNoIcon(code),
+      temperatureMax: Math.round(Math.max(...dayTemps)),
+      temperatureMin: Math.round(Math.min(...dayTemps)),
+    });
+  }
+
+  return daily;
+};
+
 const fetchMetNo = async (
   lat: number,
   lon: number
@@ -119,7 +187,8 @@ const fetchMetNo = async (
   }
 
   const data = (await res.json()) as MetNoResponse;
-  const [now] = data.properties.timeseries;
+  const series = data.properties.timeseries;
+  const [now] = series;
   const temp = Math.round(now.data.instant.details.air_temperature);
 
   const symbolCode =
@@ -127,19 +196,41 @@ const fetchMetNo = async (
     now.data.next_6_hours?.summary.symbol_code ??
     "clearsky_day";
 
-  const high = now.data.next_6_hours
-    ? Math.round(now.data.next_6_hours.details.air_temperature_max)
-    : temp;
-  const low = now.data.next_6_hours
-    ? Math.round(now.data.next_6_hours.details.air_temperature_min)
-    : temp;
+  // Compute today's high/low from the next 24 hourly entries.
+  const next24 = series.slice(0, 24);
+  const temps24 = next24.map((t) => t.data.instant.details.air_temperature);
+  const high = Math.round(Math.max(...temps24));
+  const low = Math.round(Math.min(...temps24));
+
+  // Hourly strip — next 3 entries after "now", on the hour.
+  const hourly: HourlyForecast[] = series.slice(1, 4).map((entry) => {
+    const code =
+      entry.data.next_1_hours?.summary.symbol_code ??
+      entry.data.next_6_hours?.summary.symbol_code ??
+      "clearsky_day";
+    const date = new Date(entry.time);
+    const hh = date.getHours().toString().padStart(2, "0");
+    const mm = date.getMinutes().toString().padStart(2, "0");
+    return {
+      icon: mapMetNoIcon(code),
+      temperature: Math.round(entry.data.instant.details.air_temperature),
+      time: `${hh}:${mm}`,
+    };
+  });
+
+  const daily = buildDailyForecasts(series, now.time);
 
   return {
     condition: mapMetNoCondition(symbolCode),
+    daily,
+    hourly,
+    humidity: Math.round(now.data.instant.details.relative_humidity ?? 0),
     icon: mapMetNoIcon(symbolCode),
+    precipitation: now.data.next_1_hours?.details?.precipitation_amount ?? 0,
     temperature: temp,
     temperatureHigh: high,
     temperatureLow: low,
+    windSpeed: now.data.instant.details.wind_speed ?? 0,
   };
 };
 
@@ -216,10 +307,15 @@ const fetchOpenWeatherMap = async (
 
   return {
     condition: mapOWMCondition(weather.main),
+    daily: [],
+    hourly: [],
+    humidity: 0,
     icon: mapOWMIcon(weather.id),
+    precipitation: 0,
     temperature: Math.round(data.main.temp),
     temperatureHigh: Math.round(data.main.temp_max),
     temperatureLow: Math.round(data.main.temp_min),
+    windSpeed: 0,
   };
 };
 
@@ -277,18 +373,12 @@ export const fetchWeather = async (
     return null;
   }
 
-  let weather: Omit<WeatherData, "location">;
-
-  if (provider === "openweathermap") {
-    if (!apiKey) {
-      throw new Error("OpenWeatherMap requires an API key");
-    }
-    weather = await fetchOpenWeatherMap(lat, lon, apiKey);
-  } else {
-    weather = await fetchMetNo(lat, lon);
-  }
+  const weatherData =
+    provider === "openweathermap" && apiKey
+      ? await fetchOpenWeatherMap(lat, lon, apiKey)
+      : await fetchMetNo(lat, lon);
 
   const location = locationName ?? (await reverseGeocode(lat, lon));
 
-  return { ...weather, location };
+  return { ...weatherData, location };
 };

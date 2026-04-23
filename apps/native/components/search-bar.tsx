@@ -3,25 +3,25 @@ import {
   createContext,
   use,
   useCallback,
-  useEffect,
   useMemo,
   useRef,
   useState,
 } from "react";
-import { Keyboard, Pressable, View } from "react-native";
+import { Pressable, View } from "react-native";
 import type { NativeSyntheticEvent } from "react-native";
 import { EnrichedTextInput } from "react-native-enriched";
 import type {
   EnrichedTextInputInstance,
   OnChangeMentionEvent,
+  OnChangeTextEvent,
 } from "react-native-enriched";
-import type { OnChangeTextEvent } from "react-native-enriched";
 import Animated, { FadeIn, FadeOut } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { LauncherConfigContext } from "@/context/launcher-config";
 import { useEnrichedSearch } from "@/hooks/use-enriched-search";
 import type { SelectionCallbacks } from "@/hooks/use-enriched-search";
+import { useKeyboardHeight } from "@/hooks/use-keyboard-height";
 import type { Suggestion } from "@/types/enriched-search";
 import type { SearchFilter } from "@/types/search";
 
@@ -32,11 +32,18 @@ import { Icon, ICON_MAP } from "./ui/icon";
 // --- Context ---
 
 interface SearchBarContextValue {
-  state: { isActive: boolean; searchText: string };
+  state: {
+    isActive: boolean;
+    searchText: string;
+    inputHeight: number;
+    hidden: boolean;
+  };
   actions: {
     activate: () => void;
     deactivate: () => void;
     setSearchText: (text: string) => void;
+    setInputHeight: (height: number) => void;
+    setHidden: (hidden: boolean) => void;
   };
   filterToggleRef: React.MutableRefObject<
     ((filter: SearchFilter) => void) | null
@@ -54,14 +61,13 @@ interface SearchBarContextValue {
     onSelectSuggestion: (
       suggestion: Suggestion,
       callbacks: SelectionCallbacks
-    ) => void;
+    ) => Promise<void>;
   };
 }
 
 interface SearchBarProviderProps {
   children: React.ReactNode;
   onActivate?: () => void;
-  onToggleFilter?: (filter: SearchFilter) => void;
 }
 
 const SearchBarContext = createContext<SearchBarContextValue | null>(null);
@@ -71,10 +77,11 @@ export const useSearchBar = () => use(SearchBarContext);
 const SearchBarProvider = ({
   children,
   onActivate,
-  onToggleFilter,
 }: SearchBarProviderProps) => {
   const [isActive, setIsActive] = useState(false);
   const [searchText, setSearchText] = useState("");
+  const [inputHeight, setInputHeight] = useState(0);
+  const [hidden, setHidden] = useState(false);
   const enrichedRef = useRef<EnrichedTextInputInstance>(null);
   const filterToggleRef = useRef<((filter: SearchFilter) => void) | null>(null);
   const submitRef = useRef<(() => void) | null>(null);
@@ -95,7 +102,13 @@ const SearchBarProvider = ({
 
   const value = useMemo(
     () => ({
-      actions: { activate, deactivate, setSearchText },
+      actions: {
+        activate,
+        deactivate,
+        setHidden,
+        setInputHeight,
+        setSearchText,
+      },
       enriched: {
         activeTrigger: enrichedSearch.activeTrigger,
         onChangeMention: enrichedSearch.onChangeMention,
@@ -106,10 +119,18 @@ const SearchBarProvider = ({
       },
       filterToggleRef,
       meta: { enrichedRef },
-      state: { isActive, searchText },
+      state: { hidden, inputHeight, isActive, searchText },
       submitRef,
     }),
-    [activate, deactivate, isActive, searchText, enrichedSearch]
+    [
+      activate,
+      deactivate,
+      hidden,
+      inputHeight,
+      isActive,
+      searchText,
+      enrichedSearch,
+    ]
   );
 
   return <SearchBarContext value={value}>{children}</SearchBarContext>;
@@ -121,20 +142,7 @@ const SearchBarFrame = ({ children }: { children: React.ReactNode }) => {
   const config = use(LauncherConfigContext);
   const ctx = use(SearchBarContext);
   const insets = useSafeAreaInsets();
-  const [keyboardHeight, setKeyboardHeight] = useState(0);
-
-  useEffect(() => {
-    const showSub = Keyboard.addListener("keyboardDidShow", (e) => {
-      setKeyboardHeight(e.endCoordinates.height);
-    });
-    const hideSub = Keyboard.addListener("keyboardDidHide", () => {
-      setKeyboardHeight(0);
-    });
-    return () => {
-      showSub.remove();
-      hideSub.remove();
-    };
-  }, []);
+  const keyboardHeight = useKeyboardHeight();
 
   if (!config) {
     return null;
@@ -156,8 +164,17 @@ const SearchBarFrame = ({ children }: { children: React.ReactNode }) => {
     ? { top: insets.top + 8 }
     : { bottom: bottomOffset };
 
+  const isHidden = ctx?.state.hidden ?? false;
+
+  if (isHidden) {
+    return null;
+  }
+
   return (
-    <View className="absolute left-4 right-4 z-50" style={framePosition}>
+    <View
+      className="absolute left-4 right-4 z-50"
+      style={[framePosition, !isTop && { flexDirection: "column-reverse" }]}
+    >
       {children}
     </View>
   );
@@ -166,50 +183,112 @@ const SearchBarFrame = ({ children }: { children: React.ReactNode }) => {
 // --- Icon ---
 
 const SearchBarIcon = () => (
-  <View className="items-center w-7">
-    <Icon name={ICON_MAP.search} size={20} />
+  <View className="items-center justify-center w-6 h-6">
+    <Icon name={ICON_MAP.search} size={18} />
   </View>
 );
 
 // --- Input (EnrichedTextInput) ---
 
+// Roughly six visible lines.
+const MAX_INPUT_HEIGHT = 22 * 6;
+
 const SearchBarInput = () => {
   const ctx = use(SearchBarContext);
   const foreground = useThemeColor("foreground");
   const accent = useThemeColor("accent");
+  const muted = useThemeColor("muted");
+  const lastNaturalHeight = useRef(0);
+  const actions = ctx?.actions;
+  const enriched = ctx?.enriched;
+  const inputHeight = ctx?.state.inputHeight ?? 0;
+  const isAtMax = inputHeight >= MAX_INPUT_HEIGHT;
+
+  const handleFocus = useCallback(() => {
+    actions?.activate();
+  }, [actions]);
+
+  const handleChangeText = useCallback(
+    (e: NativeSyntheticEvent<OnChangeTextEvent>) => {
+      const text = e.nativeEvent.value;
+      actions?.setSearchText(text);
+      if (text.length === 0) {
+        actions?.setInputHeight(0);
+        lastNaturalHeight.current = 0;
+      }
+    },
+    [actions]
+  );
+
+  const handleKeyPress = useCallback(
+    (e: NativeSyntheticEvent<{ key: string }>) => {
+      if (e.nativeEvent.key === "Enter") {
+        ctx?.submitRef.current?.();
+      }
+    },
+    [ctx]
+  );
+
+  const handleLayout = useCallback(
+    (e: { nativeEvent: { layout: { height: number } } }) => {
+      const { height } = e.nativeEvent.layout;
+      // Avoid layout feedback loops from tiny native measurement shifts.
+      if (Math.abs(height - lastNaturalHeight.current) > 2) {
+        lastNaturalHeight.current = height;
+        actions?.setInputHeight(Math.min(height, MAX_INPUT_HEIGHT));
+      }
+    },
+    [actions]
+  );
+
+  const handleStartMention = useCallback(
+    (indicator: string) => {
+      enriched?.onStartMention(indicator);
+    },
+    [enriched]
+  );
+
+  const handleChangeMention = useCallback(
+    (event: OnChangeMentionEvent) => {
+      enriched?.onChangeMention(event);
+    },
+    [enriched]
+  );
+
+  const handleEndMention = useCallback(
+    (indicator: string) => {
+      enriched?.onEndMention(indicator);
+    },
+    [enriched]
+  );
 
   if (!ctx) {
     return null;
   }
 
-  const { actions, meta, enriched, submitRef } = ctx;
-
-  const handleFocus = () => actions.activate();
-
-  const handleChangeText = (e: NativeSyntheticEvent<OnChangeTextEvent>) => {
-    actions.setSearchText(e.nativeEvent.value);
-  };
-
-  const handleKeyPress = (e: NativeSyntheticEvent<{ key: string }>) => {
-    if (e.nativeEvent.key === "Enter") {
-      submitRef.current?.();
-    }
-  };
-
   return (
-    <View className="flex-1 justify-center" style={{ minHeight: 44 }}>
+    <View
+      className="flex-1"
+      style={
+        isAtMax ? { height: MAX_INPUT_HEIGHT, overflow: "hidden" } : undefined
+      }
+    >
       <EnrichedTextInput
-        ref={meta.enrichedRef}
+        ref={ctx.meta.enrichedRef}
         autoCapitalize="none"
+        scrollEnabled={isAtMax}
         mentionIndicators={["@", "#", ":", "/"]}
         placeholder="Search"
-        placeholderTextColor="#9ca3af"
+        placeholderTextColor={muted as string}
+        cursorColor={accent as string}
+        selectionColor={accent as string}
         onFocus={handleFocus}
         onChangeText={handleChangeText}
         onKeyPress={handleKeyPress}
-        onStartMention={enriched.onStartMention}
-        onChangeMention={enriched.onChangeMention}
-        onEndMention={enriched.onEndMention}
+        onLayout={handleLayout}
+        onStartMention={handleStartMention}
+        onChangeMention={handleChangeMention}
+        onEndMention={handleEndMention}
         htmlStyle={{
           mention: {
             "#": {
@@ -234,10 +313,9 @@ const SearchBarInput = () => {
           },
         }}
         style={{
+          backgroundColor: "transparent",
           color: foreground as string,
-          flex: 1,
           fontSize: 16,
-          minHeight: 44,
         }}
       />
     </View>
@@ -267,7 +345,7 @@ const SearchBarActions = () => {
           exiting={FadeOut.duration(100)}
         >
           <Pressable
-            className="h-9 w-9 items-center justify-center"
+            className="size-4 items-center justify-center"
             onPress={handleClear}
           >
             <Icon name={ICON_MAP.close} size={18} />
@@ -283,40 +361,42 @@ const SearchBarActions = () => {
 
 const SearchBarSuggestions = () => {
   const ctx = use(SearchBarContext);
+  const handleSelect = useCallback(
+    async (suggestion: Suggestion) => {
+      const ref = ctx?.meta.enrichedRef.current;
+      if (!ref || !ctx) {
+        return;
+      }
+
+      const callbacks: SelectionCallbacks = {
+        insertText: (_text: string) => {
+          // For emoji, use setMention with : indicator
+          // The emoji character will display as the mention text
+        },
+        setMention: (
+          indicator: string,
+          displayText: string,
+          attributes: Record<string, string>
+        ) => {
+          ref.setMention(indicator, displayText, attributes);
+        },
+        setValue: (text: string) => {
+          ref.setValue(text);
+          ctx.actions.setSearchText(text);
+        },
+        toggleFilter: (filter: SearchFilter) => {
+          ctx.filterToggleRef.current?.(filter);
+        },
+      };
+
+      await ctx.enriched.onSelectSuggestion(suggestion, callbacks);
+    },
+    [ctx]
+  );
 
   if (!ctx || !ctx.enriched.activeTrigger) {
     return null;
   }
-
-  const handleSelect = (suggestion: Suggestion) => {
-    const ref = ctx.meta.enrichedRef.current;
-    if (!ref) {
-      return;
-    }
-
-    const callbacks: SelectionCallbacks = {
-      insertText: (_text: string) => {
-        // For emoji, use setMention with : indicator
-        // The emoji character will display as the mention text
-      },
-      setMention: (
-        indicator: string,
-        displayText: string,
-        attributes: Record<string, string>
-      ) => {
-        ref.setMention(indicator, displayText, attributes);
-      },
-      setValue: (text: string) => {
-        ref.setValue(text);
-        ctx.actions.setSearchText("");
-      },
-      toggleFilter: (filter: SearchFilter) => {
-        ctx.filterToggleRef.current?.(filter);
-      },
-    };
-
-    ctx.enriched.onSelectSuggestion(suggestion, callbacks);
-  };
 
   return (
     <SuggestionPopup

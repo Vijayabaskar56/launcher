@@ -15,18 +15,6 @@ export const Icon = ({ name, size = 20 }: IconProps) => {
   return <Ionicons name={name} size={size} color={color} />;
 };
 
-export const IconText = ({
-  name,
-  size = 20,
-}: {
-  name: IoniconName;
-  size?: number;
-}) => {
-  const color = useThemeColor("foreground");
-
-  return <Ionicons name={name} size={size} color={color} />;
-};
-
 export const IconMuted = ({
   name,
   size = 20,
@@ -79,6 +67,7 @@ export const ICON_MAP: Record<string, IoniconName> = {
   browser: "globe-outline",
   calendar: "calendar-outline",
   camera: "camera",
+  checkCircle: "checkmark-circle",
   checkmark: "checkmark",
   chevronLeft: "chevron-back",
   chevronRight: "chevron-forward",
@@ -87,6 +76,7 @@ export const ICON_MAP: Record<string, IoniconName> = {
   cog: "cog-outline",
   download: "download-outline",
   drag: "menu",
+  edit: "create-outline",
   eye: "eye",
   eyeOff: "eye-off-outline",
   flash: "flash",

@@ -1,7 +1,6 @@
 import { MaterialIcons } from "@expo/vector-icons";
-import { useThemeColor } from "heroui-native";
-import { useCallback } from "react";
-import { Pressable, ScrollView, Text, View } from "react-native";
+import { Button, useThemeColor } from "heroui-native";
+import { ScrollView, Text, View } from "react-native";
 
 import { useThemeOverrides } from "@/context/theme-overrides";
 
@@ -14,21 +13,7 @@ export default function PluginsSettings() {
   const defaultColor = useThemeColor("default");
   const foreground = useThemeColor("foreground");
   const muted = useThemeColor("muted");
-  const { cardRadius, smallRadius } = useThemeOverrides();
-
-  const getAddButtonStyle = useCallback(
-    ({ pressed }: { pressed: boolean }) => ({
-      alignItems: "center" as const,
-      backgroundColor: pressed ? "rgba(255, 255, 255, 0.1)" : defaultColor,
-      borderCurve: "continuous" as const,
-      borderRadius: smallRadius,
-      flexDirection: "row" as const,
-      gap: 8,
-      justifyContent: "center" as const,
-      paddingVertical: 14,
-    }),
-    [defaultColor, smallRadius]
-  );
+  const { cardRadius } = useThemeOverrides();
 
   return (
     <ScrollView
@@ -85,19 +70,10 @@ export default function PluginsSettings() {
             Plugins extend launcher functionality with additional features.
           </Text>
         </View>
-        <Pressable onPress={noop} style={getAddButtonStyle}>
+        <Button variant="secondary" onPress={noop}>
           <MaterialIcons name="add" size={20} color={foreground} />
-          <Text
-            style={{
-              color: foreground,
-              fontSize: 15,
-              fontWeight: "600",
-              letterSpacing: -0.2,
-            }}
-          >
-            Add Plugin (coming soon)
-          </Text>
-        </Pressable>
+          <Button.Label>Add Plugin (coming soon)</Button.Label>
+        </Button>
       </View>
     </ScrollView>
   );

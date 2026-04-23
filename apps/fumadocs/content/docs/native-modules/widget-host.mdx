@@ -1,0 +1,161 @@
+---
+title: Widget Host
+description: Host third-party Android home-screen widgets via AppWidgetHost and render them inline as a Nitro HybridView.
+icon: LayoutGrid
+---
+
+`react-native-widget-host` is the most structurally interesting of the five
+native modules. It turns React Native into a full
+[`AppWidgetHost`](https://developer.android.com/reference/android/appwidget/AppWidgetHost)
+— the same machinery stock launchers use to display third-party widgets
+from Gmail, Spotify, DAVx⁵, Calendar, and everything else in the system
+widget picker — and it renders those widgets **inline** inside the React
+tree via a Nitro HybridView.
+
+## Purpose
+
+Hosting a widget is a three-phase dance between launcher and widget
+provider:
+
+1. **Discovery** — enumerate installed widget providers.
+2. **Binding** — allocate an ID, request the system's "widget bind"
+   permission for that ID, then optionally launch a configure activity.
+3. **Rendering** — create an `AppWidgetHostView` backed by the widget ID,
+   keep it listening for `RemoteViews` updates, and stop listening when
+   backgrounded.
+
+All three phases are wrapped in a single async JS call and a single native
+view component.
+
+## Install location
+
+Workspace package at `packages/react-native-widget-host`.
+
+## TypeScript API
+
+```ts
+import { WidgetHostService, AppWidgetView } from "react-native-widget-host";
+
+// --- Data types ---
+
+export interface WidgetProviderInfo {
+  provider: string; // ComponentName flat string
+  packageName: string;
+  label: string;
+  minWidth: number; // px
+  minHeight: number; // px
+}
+
+// --- HybridObject: lifecycle & discovery ---
+
+export interface WidgetHostService {
+  getInstalledWidgetProviders(): WidgetProviderInfo[];
+  allocateAndBindWidget(provider: string): Promise<number>;
+  deleteWidget(widgetId: number): void;
+}
+
+// --- HybridView: the widget renderer ---
+
+export interface AppWidgetViewProps {
+  appWidgetId: number;
+  widgetWidth: number;
+  widgetHeight: number;
+}
+
+export interface AppWidgetViewMethods {
+  onStatusChange(callback: (status: string) => void): void;
+}
+```
+
+`allocateAndBindWidget()` returns a `Promise<number>` — the widget ID. It
+resolves once **binding and configuration are both complete**, and rejects
+if the user cancels at any stage. Persist that ID in storage; that is the
+handle you'll pass to `<AppWidgetView appWidgetId={id} />` forever after.
+
+## The binding handshake
+
+`AppWidgetHostManager.allocateAndBindWidget()` runs this sequence:
+
+1. **Guard** — only one bind/configure flow can be in flight at a time.
+2. `widgetHost.allocateAppWidgetId()` — reserve a fresh ID.
+3. `widgetManager.bindAppWidgetIdIfAllowed(widgetId, componentName)` — try
+   the happy path. If the launcher already holds
+   `android.permission.BIND_APPWIDGET` for this provider (e.g. because it
+   is the default launcher), this returns `true` and we skip to step 5.
+4. **Picker flow** — otherwise, launch
+   `AppWidgetManager.ACTION_APPWIDGET_BIND` via
+   `startActivityForResult(REQUEST_BIND)`. The system shows a permission
+   dialog for this specific provider. An `ActivityEventListener`
+   registered on the React context catches the result.
+5. **Configure flow** — if the provider has a `configure` activity
+   (`AppWidgetProviderInfo.configure != null`), call
+   `widgetHost.startAppWidgetConfigureActivityForResult(...)` with
+   `REQUEST_CONFIGURE`. The widget's own setup UI runs.
+6. **Resolve / reject** — on `RESULT_OK`, resolve with the widget ID. On
+   any cancellation, delete the allocated ID and reject.
+
+Two pending-state fields (`pendingBindPromise` / `pendingConfigurePromise`)
+plus their widget IDs are cleared on every terminal transition, so a
+cancelled bind never leaks an allocated ID.
+
+## Rendering: the HybridView
+
+`AppWidgetView` is a Nitro
+[HybridView](https://nitro.margelo.com), which means it is a real Android
+`View` embedded directly in the React Native view hierarchy (no fragment,
+no wrapper activity). `HybridAppWidgetView.kt` extends `TrackedAppWidgetHostView`,
+a subclass of `AppWidgetHostView` that reports size and update events.
+
+When React sets `appWidgetId`, the view:
+
+1. Calls `AppWidgetHostManager.getInstance(context).createView(context, id)`.
+2. `createView` resolves the `AppWidgetProviderInfo` and calls
+   `widgetHost.createView(...)`, which under the hood instantiates a
+   `TrackedAppWidgetHostView` and calls `setAppWidget(id, info)`.
+3. Size updates (`widgetWidth` / `widgetHeight`) call
+   `updateAppWidgetSize(...)` so the widget can choose the right layout
+   variant.
+
+## Lifecycle: startListening / stopListening
+
+`AppWidgetHost.startListening()` is required for widgets to receive
+`RemoteViews` updates. Calling it while the activity isn't foregrounded
+wastes battery. The manager hooks
+`Application.ActivityLifecycleCallbacks`:
+
+- `onActivityResumed` → `startListeningSafely()`
+- `onActivityPaused` → `stopListeningSafely()`
+
+Both calls are guarded by an `isListening` flag and swallow exceptions,
+because the host can throw if the state is inconsistent (for example,
+double-start after a config change).
+
+## Filtering
+
+On API 28+, providers flagged with `WIDGET_FEATURE_HIDE_FROM_PICKER` are
+excluded from `getInstalledWidgetProviders()`. The list is sorted by label
+(case-insensitive).
+
+## Permissions & setup
+
+- `android.permission.BIND_APPWIDGET` — a privileged permission that only
+  the default launcher holds implicitly. Without it, `bindAppWidgetIdIfAllowed`
+  returns `false` and the bind activity fallback kicks in for every new
+  widget.
+- Declare a stable `HOST_ID` (`1024` in the current implementation). This ID
+  is persisted by the system and must not change between launches — all
+  allocated widget IDs are scoped to it.
+- The widget host survives process restarts: persisted widget IDs from JS
+  storage can be reinflated into `AppWidgetView` without a new bind flow.
+
+## Planning doc
+
+Full design — including the HybridView architecture, the pending-state
+machine, and how this compares to rewriting the whole thing on top of
+`react-native-view`-style wrappers — is in
+`apps/native/docs/plans/2026-03-31-widget-host-implementation.md`.
+
+## External reference
+
+- [`AppWidgetHost`](https://developer.android.com/reference/android/appwidget/AppWidgetHost)
+- [`AppWidgetManager`](https://developer.android.com/reference/android/appwidget/AppWidgetManager)

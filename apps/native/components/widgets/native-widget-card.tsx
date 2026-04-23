@@ -21,7 +21,6 @@ interface NativeWidgetCardProps {
   size?: WidgetSize;
   opacity?: number;
   onRemove?: () => void;
-  onReplace?: () => void;
 }
 
 const NativeWidgetCard = function NativeWidgetCard({
@@ -29,7 +28,6 @@ const NativeWidgetCard = function NativeWidgetCard({
   size = "large",
   opacity = 1,
   onRemove,
-  onReplace,
 }: NativeWidgetCardProps) {
   const sizeConfig = WIDGET_SIZES[size];
 
@@ -37,9 +35,8 @@ const NativeWidgetCard = function NativeWidgetCard({
     return (
       <Card
         variant="transparent"
-        className="w-full rounded-2xl border border-white/10 p-4 items-center justify-center gap-3"
+        className="w-full rounded-2xl border border-border/40 p-4 items-center justify-center gap-3 bg-surface/70"
         style={{
-          backgroundColor: "rgba(255,255,255,0.08)",
           minHeight: sizeConfig.height,
           opacity,
         }}
@@ -52,22 +49,10 @@ const NativeWidgetCard = function NativeWidgetCard({
           {onRemove && (
             <Pressable
               onPress={onRemove}
-              className="rounded-full px-5 py-2"
-              style={{ backgroundColor: "rgba(255,255,255,0.1)" }}
+              className="rounded-full px-5 py-2 bg-surface-secondary"
             >
               <Text className="text-sm font-semibold text-foreground">
                 Remove
-              </Text>
-            </Pressable>
-          )}
-          {onReplace && (
-            <Pressable
-              onPress={onReplace}
-              className="rounded-full px-5 py-2"
-              style={{ backgroundColor: "rgba(255,255,255,0.15)" }}
-            >
-              <Text className="text-sm font-semibold text-foreground">
-                Replace
               </Text>
             </Pressable>
           )}
@@ -81,9 +66,8 @@ const NativeWidgetCard = function NativeWidgetCard({
   return (
     <Card
       variant="transparent"
-      className="w-full rounded-2xl border border-white/10 overflow-hidden"
+      className="w-full rounded-2xl border border-border/40 overflow-hidden bg-surface/70"
       style={{
-        backgroundColor: "rgba(255,255,255,0.08)",
         minHeight: sizeConfig.height,
         opacity,
       }}

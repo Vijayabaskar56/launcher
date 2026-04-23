@@ -19,6 +19,7 @@ class HybridNotificationBridge : HybridNotificationBridgeSpec() {
     private val mediaHandler: MediaSessionHandler by lazy {
         MediaSessionHandler(context).also {
             LauncherNotificationService.mediaSessionHandler = it
+            LauncherNotificationService.refreshActiveMediaSession()
         }
     }
 
@@ -72,10 +73,21 @@ class HybridNotificationBridge : HybridNotificationBridgeSpec() {
 
     override fun onMediaMetadataChanged(callback: (metadata: MediaMetadata?) -> Unit) {
         mediaHandler.onMetadataChanged = callback
+        LauncherNotificationService.refreshActiveMediaSession()
+        mediaHandler.pushCurrentState()
     }
 
     override fun onPlaybackStateChanged(callback: (state: PlaybackState) -> Unit) {
         mediaHandler.onPlaybackStateChanged = callback
+        LauncherNotificationService.refreshActiveMediaSession()
+        mediaHandler.pushCurrentPlaybackState()
+    }
+
+    override val canSeek: Boolean
+        get() = mediaHandler.canSeek()
+
+    override fun getPlaybackPosition(): Double {
+        return mediaHandler.getPlaybackPosition()
     }
 
     // --- Transport controls ---
@@ -86,6 +98,10 @@ class HybridNotificationBridge : HybridNotificationBridgeSpec() {
 
     override fun pause() {
         mediaHandler.pause()
+    }
+
+    override fun seekTo(positionMs: Double) {
+        mediaHandler.seekTo(positionMs.toLong())
     }
 
     override fun skipToNext() {

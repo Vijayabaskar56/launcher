@@ -1,0 +1,161 @@
+---
+title: Gestures
+description: Kvaesitso-style gesture model, assignable actions, and the Reanimated animation pipeline.
+---
+
+The launcher implements a Kvaesitso-style gesture model on top of
+[react-native-gesture-handler](https://docs.swmansion.com/react-native-gesture-handler/)
+and [react-native-reanimated](https://docs.swmansion.com/react-native-reanimated/).
+Every home screen gesture is configurable, runs on the UI thread, and can
+trigger either an in-app action or a system-level action through
+`react-native-accessibility-actions`.
+
+## The gesture set
+
+Six gestures are assignable:
+
+| Gesture     | Setting key  | Default         |
+| ----------- | ------------ | --------------- |
+| Swipe up    | `swipeUp`    | `app-drawer`    |
+| Swipe down  | `swipeDown`  | `notifications` |
+| Swipe left  | `swipeLeft`  | `none`          |
+| Swipe right | `swipeRight` | `none`          |
+| Double tap  | `doubleTap`  | `lock-screen`   |
+| Long press  | `longPress`  | `none`          |
+
+Each can be bound to one of ten actions: `none`, `notifications`,
+`quick-settings`, `lock-screen`, `recents`, `power-menu`, `search`, `widgets`,
+`app-drawer`, `launch-app`. When `launch-app` is selected, the target package
+is stored in `gestures.launchAppBindings[gestureKey]`. The action list and
+required permissions are rendered in the gesture picker
+(`components/settings/gesture-action-sheet.tsx`), which shows a lock icon
+beside actions that need the Accessibility Service.
+
+## Pan gesture: direction detection and rubberband
+
+`hooks/use-homescreen-gestures.ts` composes three gestures with
+`useExclusiveGestures(panGesture, doubleTapGesture, longPressGesture)`.
+
+The pan gesture uses a Kvaesitso quadrant model. Once the finger moves past a
+15 dp `TOUCH_SLOP`, the larger of `|dx|` and `|dy|` decides whether the
+gesture is horizontal or vertical, and the sign picks the direction:
+
+```ts
+if (absX > absY) return offsetX > 0 ? "right" : "left";
+return offsetY > 0 ? "down" : "up";
+```
+
+If the resolved direction isn't bound to an action, the gesture is discarded
+and the finger continues to scroll the underlying content. Once a direction
+is locked in, the movement is fed through a rubberband function so the
+content follows the finger elastically past the 60 dp activation threshold:
+
+```ts
+// distance <= threshold → linear
+// distance >  threshold → threshold + overflow / (1 + overflow / (threshold * 0.5))
+```
+
+Two shared values track progress:
+
+- `dragProgress` — `rawDistance / RUBBERBAND_THRESHOLD`, clamped to `[0, 1]`.
+- `rubberbandOffset` — the rubberbanded distance used for the push-aside
+  effect on the home content.
+
+A medium-impact haptic fires the first time `rawDistance` crosses the 60 dp
+threshold, a success-notification haptic fires when the action is committed,
+and a heavy-impact haptic fires when a long press activates.
+
+On release the gesture commits if either the threshold was crossed or the
+directional velocity exceeds 500 dp/s (a quick flick). Both `dragProgress`
+and `rubberbandOffset` spring back to zero with
+`withSpring({ damping: 20, stiffness: 200 })`.
+
+## Content animation
+
+`hooks/use-gesture-animations.ts` exports two hooks.
+
+`useHomescreenGestureStyle` returns an animated style for the home content
+itself. While dragging it interpolates opacity from `1 → 0.85`, scale from
+`1 → 0.97`, and translates in the gesture direction by `rubberbandOffset * 0.3`
+so the home screen "gets out of the way" of the panel that's about to appear.
+
+`usePanelRevealStyle` returns a style for the panel being revealed and
+supports three animation styles:
+
+- **rubberband** — elastic peek, `translateY` from `screenHeight` to
+  `screenHeight * 0.6`, opacity `0 → 0.8`.
+- **push** — linear slide that follows the finger, full opacity ramp.
+- **zoomIn** — fade and scale from `0.9 → 1`, used for tap-triggered reveals.
+
+Both hooks early-exit when the panel is fully open so the style recompute is
+a no-op during scrolls inside the panel.
+
+## Directional panels
+
+`hooks/use-directional-panel.ts` wraps an `offset` shared value and a
+`slideFrom` direction and returns a worklet style that animates the panel's
+`translateX`/`translateY` and opacity. The helper `isHorizontal(dir)` decides
+whether to use screen width or height as the axis.
+
+`hooks/use-directional-dismiss.ts` gives each open panel a pan gesture that
+dismisses it by dragging towards the edge it came from. It uses
+`manualActivation: true` and only calls `GestureStateManager.activate` once
+three conditions pass in `onTouchesMove`:
+
+1. The scroll boundary in the primary direction is ready (scroll view is at
+   top for a bottom-to-top drag, at bottom for a top-to-bottom drag, etc.).
+2. The primary delta exceeds a 12 dp touch slop.
+3. The cross-axis delta is smaller than the primary delta (so vertical
+   scrolls don't accidentally dismiss a side panel).
+
+Direction of dismissal is whichever way the panel was opened from, so
+`slideFrom === "bottom"` means "drag down to dismiss", and so on. On release,
+a panel closes if it moved more than 25% of the axis _or_ if the directional
+velocity exceeds 500 dp/s.
+
+## Scroll handoff
+
+`hooks/use-scroll-dismiss-handoff.ts` exposes a tiny state hook that captures
+the `NativeGesture` of the inner `ScrollView` and feeds it back to the
+dismiss pan gesture. The dismiss gesture then uses
+`simultaneousWith: scrollGesture` and `block: scrollGesture` so scrolling and
+dismissing share the touch stream: the scroll view consumes the gesture
+until it hits its boundary, at which point the dismiss gesture takes over
+seamlessly — a pattern Kvaesitso calls "scroll-to-pan handoff".
+
+The home screen passes `scrollBoundary` flags into `useHomescreenGestures`
+mirroring the same idea in the opposite direction: a swipe-down on the home
+screen only triggers when the currently visible panel (if any) is scrolled
+to its top, so the user can flick through a list without accidentally
+triggering notifications.
+
+## Accessibility-based system actions
+
+System-level actions are delegated to
+`react-native-accessibility-actions`. The home screen builds an
+`actionContext` object whose handlers call the library:
+
+```ts
+openNotifications: () => accessibilityActions.openNotifications(),
+openQuickSettings: () => accessibilityActions.openQuickSettings(),
+lockScreen:        () => accessibilityActions.lockScreen(),
+openRecents:       () => accessibilityActions.openRecents(),
+openPowerMenu:     () => accessibilityActions.showPowerMenu(),
+```
+
+Each handler is wrapped in a try/catch that, on failure, pops an `Alert`
+offering to jump to the Accessibility settings via
+`accessibilityActions.openAccessibilitySettings()`. The gesture action sheet
+surfaces this requirement ahead of time by showing a lock glyph and a help
+string next to any action whose `getActionPermission` is non-null.
+
+## Related files
+
+- `apps/native/hooks/use-homescreen-gestures.ts`
+- `apps/native/hooks/use-gesture-animations.ts`
+- `apps/native/hooks/use-directional-panel.ts`
+- `apps/native/hooks/use-directional-dismiss.ts`
+- `apps/native/hooks/use-scroll-dismiss-handoff.ts`
+- `apps/native/components/settings/gesture-action-sheet.tsx`
+- `apps/native/docs/plans/2026-03-30-gesture-system-implementation.md`
+- `apps/native/docs/plans/2026-03-30-directional-panel-animations.md`

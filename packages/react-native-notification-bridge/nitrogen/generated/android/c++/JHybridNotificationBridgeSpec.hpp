@@ -51,6 +51,7 @@ namespace margelo::nitro::notificationbridge {
   public:
     // Properties
     bool getIsNotificationListenerEnabled() override;
+    bool getCanSeek() override;
 
   public:
     // Methods
@@ -59,8 +60,10 @@ namespace margelo::nitro::notificationbridge {
     void onNotificationRemoved(const std::function<void(const std::string& /* key */)>& callback) override;
     void onMediaMetadataChanged(const std::function<void(const std::optional<MediaMetadata>& /* metadata */)>& callback) override;
     void onPlaybackStateChanged(const std::function<void(PlaybackState /* state */)>& callback) override;
+    double getPlaybackPosition() override;
     void play() override;
     void pause() override;
+    void seekTo(double positionMs) override;
     void skipToNext() override;
     void skipToPrevious() override;
 

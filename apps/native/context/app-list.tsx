@@ -26,17 +26,13 @@ export const AppListContext = createContext<AppListContextValue>({
   getApp: (): InstalledApp | undefined => undefined,
   isLoading: true,
   refresh: () => {
-    // no-op default
+    /* no-op until apps load */
   },
 });
 
 const DEFAULT_ICON_SIZE = 192;
 
-export const AppListProvider = ({
-  children,
-}: {
-  children: React.ReactNode;
-}) => {
+function useAppList(): AppListContextValue {
   const [apps, setApps] = useState<InstalledApp[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
@@ -101,10 +97,18 @@ export const AppListProvider = ({
     [appMap]
   );
 
-  const value = useMemo(
+  return useMemo(
     () => ({ apps, getApp, isLoading, refresh }),
     [apps, getApp, isLoading, refresh]
   );
+}
+
+export const AppListProvider = ({
+  children,
+}: {
+  children: React.ReactNode;
+}) => {
+  const value = useAppList();
 
   return <AppListContext value={value}>{children}</AppListContext>;
 };

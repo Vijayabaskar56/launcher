@@ -1,0 +1,64 @@
+---
+title: Native Modules
+description: The five Nitro native modules that give this launcher its Android superpowers.
+icon: Cpu
+---
+
+A launcher is not an app you can build out of JavaScript alone. It has to talk
+to `PackageManager`, host third-party widgets through `AppWidgetHost`, listen
+to the system notification stream, trigger global accessibility actions, and
+open a secure WebSocket to an agent backend. All of that requires Kotlin — and
+in this project, all of that is exposed to React Native through
+[Nitro Modules](https://nitro.margelo.com).
+
+## What are Nitro Modules?
+
+[Nitro](https://nitro.margelo.com/docs/what-is-nitro) is a type-safe,
+JSI-first framework for building React Native native modules. You write a
+TypeScript `*.nitro.ts` spec, run `nitrogen`, and get generated C++/Kotlin/Swift
+bindings. The resulting "HybridObject" is called directly over JSI with zero
+bridge hops, and the TypeScript API stays exactly in sync with the native
+signature.
+
+Compared to classic turbo modules, Nitro gives us:
+
+- **Strict, typed specs.** One file, one source of truth.
+- **Synchronous calls where it matters** (icon lookups, permission checks).
+- **First-class Promises and callbacks** for async flows like widget binding
+  and RPC requests.
+- **HybridViews** — native views (like `AppWidgetHostView`) rendered inline in
+  the React tree.
+
+## Why five modules?
+
+The launcher surface area breaks down cleanly into five concerns, and each one
+lives in its own workspace package under `packages/`:
+
+| Module                                                                             | Purpose                                                                                                               | Platforms |
+| ---------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------- | --------- |
+| [`react-native-launcher-service`](/docs/native-modules/launcher-service)           | Query installed apps, load icons, icon packs, static & dynamic shortcuts, wallpaper blur.                             | Android   |
+| [`react-native-notification-bridge`](/docs/native-modules/notification-bridge)     | `NotificationListenerService` access: badge events and media session control.                                         | Android   |
+| [`react-native-accessibility-actions`](/docs/native-modules/accessibility-actions) | Global system actions (lock, notifications, quick settings, recents, power menu) via an `AccessibilityService`.       | Android   |
+| [`react-native-widget-host`](/docs/native-modules/widget-host)                     | Host third-party home-screen widgets via `AppWidgetHost` / `AppWidgetManager`, rendered inline as a Nitro HybridView. | Android   |
+| [`react-native-openclaw-gateway`](/docs/native-modules/openclaw-gateway)           | TLS-pinned WebSocket transport to an OpenClaw agent backend for chat and agent discovery.                             | Android   |
+
+<Callout type="info">
+  iOS entries exist in every spec (`ios: "swift"`) because Nitro requires a
+  platform tag, but no iOS implementations are shipped — this is an Android
+  launcher. iOS stubs are placeholders.
+</Callout>
+
+## Install location
+
+All five modules are **workspace packages** in this monorepo under
+`packages/react-native-*`. They are linked from `apps/native` via the
+Bun workspaces protocol; there is no npm publish step. Editing the Kotlin
+source in `packages/` and rebuilding the dev client is the entire "publish"
+loop.
+
+## Further reading
+
+- [What is Nitro?](https://nitro.margelo.com/docs/what-is-nitro)
+- [AppWidgetHost reference](https://developer.android.com/reference/android/appwidget/AppWidgetHost)
+- [NotificationListenerService reference](https://developer.android.com/reference/android/service/notification/NotificationListenerService)
+- [Accessibility service guide](https://developer.android.com/guide/topics/ui/accessibility/service)

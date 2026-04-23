@@ -1,8 +1,7 @@
-import { MaterialIcons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
-import { useThemeColor } from "heroui-native";
+import { Radio, RadioGroup, useThemeColor } from "heroui-native";
 import { memo, use, useCallback } from "react";
-import { Pressable, ScrollView, Text, View } from "react-native";
+import { ScrollView, Text, View } from "react-native";
 
 import { SettingsContext } from "@/context/settings";
 import { useThemeOverrides } from "@/context/theme-overrides";
@@ -14,8 +13,6 @@ interface SchemeCardProps {
   name: string;
   description: string;
   previewColors: readonly [string, string, string];
-  isSelected: boolean;
-  onSelect: (id: ThemePreset) => void;
 }
 
 const SchemeCard = memo(function SchemeCard({
@@ -23,45 +20,27 @@ const SchemeCard = memo(function SchemeCard({
   name,
   description,
   previewColors,
-  isSelected,
-  onSelect,
 }: SchemeCardProps) {
-  const { cardRadius, accentColor } = useThemeOverrides();
-  const [surface, fg, muted, border] = useThemeColor([
-    "surface",
+  const { cardRadius } = useThemeOverrides();
+  const [fg, muted, border] = useThemeColor([
     "foreground",
     "muted",
     "border",
   ] as const);
 
-  const handlePress = useCallback(() => {
-    onSelect(id);
-  }, [onSelect, id]);
-
-  const getStyle = useCallback(
-    ({ pressed }: { pressed: boolean }) => ({
-      alignItems: "center" as const,
-      backgroundColor: pressed ? surface : "transparent",
-      borderColor: isSelected ? accentColor : "transparent",
-      borderCurve: "continuous" as const,
-      borderRadius: cardRadius,
-      borderWidth: 2,
-      flexDirection: "row" as const,
-      gap: 14,
-      marginHorizontal: 16,
-      paddingHorizontal: 16,
-      paddingVertical: 16,
-    }),
-    [surface, isSelected, accentColor, cardRadius]
-  );
-
   return (
-    <Pressable onPress={handlePress} style={getStyle}>
-      <MaterialIcons
-        name={isSelected ? "radio-button-checked" : "radio-button-unchecked"}
-        size={24}
-        color={isSelected ? accentColor : muted}
-      />
+    <RadioGroup.Item
+      value={id}
+      style={{
+        borderCurve: "continuous",
+        borderRadius: cardRadius,
+        gap: 14,
+        marginHorizontal: 16,
+        paddingHorizontal: 16,
+        paddingVertical: 16,
+      }}
+    >
+      <Radio />
       <View style={{ flex: 1, gap: 2 }}>
         <Text
           style={{
@@ -99,7 +78,7 @@ const SchemeCard = memo(function SchemeCard({
           />
         ))}
       </View>
-    </Pressable>
+    </RadioGroup.Item>
   );
 });
 
@@ -108,7 +87,8 @@ const ColorSchemeList = () => {
   const router = useRouter();
 
   const handleSelect = useCallback(
-    (id: ThemePreset) => {
+    (value: string) => {
+      const id = value as ThemePreset;
       settings?.actions.updateAppearance({ themePreset: id });
       router.push(`/settings/color-scheme/${id}` as never);
     },
@@ -128,17 +108,17 @@ const ColorSchemeList = () => {
       contentInsetAdjustmentBehavior="automatic"
       contentContainerStyle={{ gap: 8, paddingBottom: 40, paddingTop: 12 }}
     >
-      {THEME_PRESETS.map((preset) => (
-        <SchemeCard
-          key={preset.id}
-          id={preset.id}
-          name={preset.name}
-          description={preset.description}
-          previewColors={preset.previewColors}
-          isSelected={currentPreset === preset.id}
-          onSelect={handleSelect}
-        />
-      ))}
+      <RadioGroup value={currentPreset} onValueChange={handleSelect}>
+        {THEME_PRESETS.map((preset) => (
+          <SchemeCard
+            key={preset.id}
+            id={preset.id}
+            name={preset.name}
+            description={preset.description}
+            previewColors={preset.previewColors}
+          />
+        ))}
+      </RadioGroup>
     </ScrollView>
   );
 };

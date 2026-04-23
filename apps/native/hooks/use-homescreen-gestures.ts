@@ -1,7 +1,11 @@
 import * as Haptics from "expo-haptics";
 import { useMemo } from "react";
-import { Gesture } from "react-native-gesture-handler";
-import type { ComposedGesture } from "react-native-gesture-handler";
+import {
+  useExclusiveGestures,
+  useLongPressGesture,
+  usePanGesture,
+  useTapGesture,
+} from "react-native-gesture-handler";
 import { useSharedValue, withSpring } from "react-native-reanimated";
 import type { SharedValue } from "react-native-reanimated";
 import { scheduleOnRN } from "react-native-worklets";
@@ -13,52 +17,54 @@ import type { GestureSettings } from "@/types/settings";
 export type SwipeDirection = "up" | "down" | "left" | "right" | null;
 
 // --- Constants (matching Kvaesitso) ---
-const RUBBERBAND_THRESHOLD = 60; // dp — drag distance before gesture activates
-const MIN_FLING_VELOCITY = 500; // dp/s — quick flick threshold
-const TOUCH_SLOP = 15; // dp — minimum movement before direction is determined
+// Drag distance before gesture activates.
+const RUBBERBAND_THRESHOLD = 60;
+// Quick flick threshold in dp/s.
+const MIN_FLING_VELOCITY = 500;
+// Minimum movement before direction is determined.
+const TOUCH_SLOP = 15;
 
 // --- Rubberband physics ---
-function rubberband(distance: number, threshold: number): number {
+const rubberband = (distance: number, threshold: number): number => {
   "worklet";
   if (distance <= threshold) {
     return distance;
   }
   const overflow = distance - threshold;
   return threshold + overflow * (1 / (1 + overflow / (threshold * 0.5)));
-}
+};
 
 // --- Direction detection (Kvaesitso quadrant model) ---
-function getSwipeDirection(offsetX: number, offsetY: number): SwipeDirection {
+const getSwipeDirection = (
+  offsetX: number,
+  offsetY: number
+): SwipeDirection => {
   "worklet";
   const absX = Math.abs(offsetX);
   const absY = Math.abs(offsetY);
 
-  // Not enough movement to determine direction
   if (absX < TOUCH_SLOP && absY < TOUCH_SLOP) {
     return null;
   }
 
-  // Dominant axis wins
   if (absX > absY) {
     return offsetX > 0 ? "right" : "left";
   }
   return offsetY > 0 ? "down" : "up";
-}
+};
 
 // --- Haptic feedback (must run on JS thread) ---
-function triggerThresholdHaptic() {
+const triggerThresholdHaptic = () => {
   Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-}
+};
 
-function triggerActionHaptic() {
+const triggerActionHaptic = () => {
   Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-}
+};
 
-function triggerLongPressHaptic() {
+const triggerLongPressHaptic = () => {
   Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
-}
-
-// --- Hook ---
+};
 
 interface ScrollBoundary {
   isAtTop: SharedValue<boolean>;
@@ -69,36 +75,113 @@ interface ScrollBoundary {
 interface UseHomescreenGesturesConfig {
   gestures: GestureSettings;
   actionContext: GestureActionContext;
-  screenHeight: number;
-  screenWidth: number;
   scrollBoundary?: ScrollBoundary;
 }
 
 export interface UseHomescreenGesturesResult {
-  gesture: ComposedGesture;
+  gesture: ReturnType<typeof useExclusiveGestures>;
   dragProgress: SharedValue<number>;
   gestureDirection: SharedValue<SwipeDirection>;
   isGestureActive: SharedValue<boolean>;
   rubberbandOffset: SharedValue<number>;
 }
 
-export function useHomescreenGestures({
+const isDirectionEnabled = (
+  direction: Exclude<SwipeDirection, null>,
+  options: {
+    hasSwipeDown: boolean;
+    hasSwipeLeft: boolean;
+    hasSwipeRight: boolean;
+    hasSwipeUp: boolean;
+  }
+) => {
+  "worklet";
+  if (direction === "down") {
+    return options.hasSwipeDown;
+  }
+  if (direction === "left") {
+    return options.hasSwipeLeft;
+  }
+  if (direction === "right") {
+    return options.hasSwipeRight;
+  }
+  return options.hasSwipeUp;
+};
+
+const isBoundaryReadyForDirection = (
+  direction: Exclude<SwipeDirection, null>,
+  scrollBoundary?: ScrollBoundary
+) => {
+  "worklet";
+  if (!scrollBoundary?.isPanelOpen) {
+    return true;
+  }
+  if (direction === "down") {
+    return scrollBoundary.isAtTop.value;
+  }
+  if (direction === "up") {
+    return scrollBoundary.isAtBottom.value;
+  }
+  return true;
+};
+
+const getPositiveDistanceForDirection = (
+  direction: Exclude<SwipeDirection, null>,
+  translationX: number,
+  translationY: number
+) => {
+  "worklet";
+  if (direction === "up") {
+    return Math.max(0, -translationY);
+  }
+  if (direction === "down") {
+    return Math.max(0, translationY);
+  }
+  if (direction === "left") {
+    return Math.max(0, -translationX);
+  }
+  return Math.max(0, translationX);
+};
+
+const getDirectionalVelocity = (
+  direction: Exclude<SwipeDirection, null>,
+  velocityX: number,
+  velocityY: number
+) => {
+  "worklet";
+  if (direction === "up") {
+    return -velocityY;
+  }
+  if (direction === "down") {
+    return velocityY;
+  }
+  if (direction === "left") {
+    return -velocityX;
+  }
+  return velocityX;
+};
+
+export const useHomescreenGestures = ({
   gestures,
   actionContext,
   scrollBoundary,
-}: UseHomescreenGesturesConfig): UseHomescreenGesturesResult {
+}: UseHomescreenGesturesConfig): UseHomescreenGesturesResult => {
+  const hasSwipeDown = gestures.swipeDown !== "none";
+  const hasSwipeLeft = gestures.swipeLeft !== "none";
+  const hasSwipeRight = gestures.swipeRight !== "none";
+  const hasSwipeUp = gestures.swipeUp !== "none";
   const gestureDirection = useSharedValue<SwipeDirection>(null);
   const dragProgress = useSharedValue(0);
   const thresholdCrossed = useSharedValue(false);
   const isGestureActive = useSharedValue(false);
   const rubberbandOffset = useSharedValue(0);
 
-  // Wrap action execution for scheduleOnRN
   const fireSwipeAction = useMemo(
     () => (direction: SwipeDirection) => {
       if (!direction) {
         return;
       }
+
       const keyMap: Record<string, keyof GestureSettings> = {
         down: "swipeDown",
         left: "swipeLeft",
@@ -109,12 +192,15 @@ export function useHomescreenGestures({
       if (!key) {
         return;
       }
+
       const action = gestures[key];
       if (typeof action !== "string") {
         return;
       }
+
       const launchBinding =
         action === "launch-app" ? gestures.launchAppBindings[key] : undefined;
+
       triggerActionHaptic();
       executeGestureAction(
         action,
@@ -123,7 +209,7 @@ export function useHomescreenGestures({
         direction
       );
     },
-    [gestures, actionContext]
+    [actionContext, gestures]
   );
 
   const fireDoubleTap = useMemo(
@@ -132,14 +218,16 @@ export function useHomescreenGestures({
       if (action === "none") {
         return;
       }
+
       const launchBinding =
         action === "launch-app"
           ? gestures.launchAppBindings.doubleTap
           : undefined;
+
       triggerActionHaptic();
       executeGestureAction(action, actionContext, launchBinding?.packageName);
     },
-    [gestures, actionContext]
+    [actionContext, gestures]
   );
 
   const fireLongPress = useMemo(
@@ -148,170 +236,140 @@ export function useHomescreenGestures({
       if (action === "none") {
         return;
       }
+
       const launchBinding =
         action === "launch-app"
           ? gestures.launchAppBindings.longPress
           : undefined;
+
       triggerLongPressHaptic();
       executeGestureAction(action, actionContext, launchBinding?.packageName);
     },
-    [gestures, actionContext]
+    [actionContext, gestures]
   );
 
-  const panGesture = useMemo(
-    () =>
-      Gesture.Pan()
-        .onStart(() => {
-          "worklet";
-          gestureDirection.value = null;
-          dragProgress.value = 0;
-          thresholdCrossed.value = false;
-          isGestureActive.value = true;
-          rubberbandOffset.value = 0;
-        })
-        .onUpdate((event) => {
-          "worklet";
-          // Determine direction if not yet locked
-          if (gestureDirection.value === null) {
-            const dir = getSwipeDirection(
-              event.translationX,
-              event.translationY
-            );
-            if (dir === null) {
-              return;
-            }
+  const panGesture = usePanGesture({
+    averageTouches: true,
+    maxPointers: 1,
+    minDistance: TOUCH_SLOP,
+    onActivate: () => {
+      gestureDirection.value = null;
+      dragProgress.value = 0;
+      thresholdCrossed.value = false;
+      isGestureActive.value = true;
+      rubberbandOffset.value = 0;
+    },
+    onDeactivate: (event) => {
+      const direction = gestureDirection.value;
+      if (direction === null) {
+        isGestureActive.value = false;
+        return;
+      }
 
-            // Check scroll boundary — don't activate if panel is open and not at edge
-            if (scrollBoundary?.isPanelOpen) {
-              if (dir === "down" && !scrollBoundary.isAtTop.value) {
-                return;
-              }
-              if (dir === "up" && !scrollBoundary.isAtBottom.value) {
-                return;
-              }
-            }
+      const velocity = getDirectionalVelocity(
+        direction,
+        event.velocityX,
+        event.velocityY
+      );
+      const shouldFire =
+        thresholdCrossed.value || velocity > MIN_FLING_VELOCITY;
 
-            gestureDirection.value = dir;
-          }
+      if (shouldFire) {
+        scheduleOnRN(fireSwipeAction, direction);
+      }
 
-          // Calculate drag distance along locked axis
-          const dir = gestureDirection.value;
-          let rawDistance = 0;
-          if (dir === "up") {
-            rawDistance = -event.translationY;
-          } else if (dir === "down") {
-            rawDistance = event.translationY;
-          } else if (dir === "left") {
-            rawDistance = -event.translationX;
-          } else if (dir === "right") {
-            rawDistance = event.translationX;
-          }
+      dragProgress.value = withSpring(0, {
+        damping: 20,
+        stiffness: 200,
+      });
+      rubberbandOffset.value = withSpring(0, {
+        damping: 20,
+        stiffness: 200,
+      });
+      gestureDirection.value = null;
+      thresholdCrossed.value = false;
+      isGestureActive.value = false;
+    },
+    onUpdate: (event) => {
+      if (gestureDirection.value === null) {
+        const nextDirection = getSwipeDirection(
+          event.translationX,
+          event.translationY
+        );
+        if (nextDirection === null) {
+          return;
+        }
 
-          // Only track positive movement in the locked direction
-          rawDistance = Math.max(0, rawDistance);
+        if (
+          !isDirectionEnabled(nextDirection, {
+            hasSwipeDown,
+            hasSwipeLeft,
+            hasSwipeRight,
+            hasSwipeUp,
+          })
+        ) {
+          return;
+        }
 
-          // Apply rubberband physics
-          const rubberbanded = rubberband(rawDistance, RUBBERBAND_THRESHOLD);
-          rubberbandOffset.value = rubberbanded;
-          dragProgress.value = Math.min(rawDistance / RUBBERBAND_THRESHOLD, 1);
+        if (!isBoundaryReadyForDirection(nextDirection, scrollBoundary)) {
+          return;
+        }
 
-          // Haptic at threshold crossing
-          if (rawDistance >= RUBBERBAND_THRESHOLD && !thresholdCrossed.value) {
-            thresholdCrossed.value = true;
-            scheduleOnRN(triggerThresholdHaptic);
-          } else if (
-            rawDistance < RUBBERBAND_THRESHOLD &&
-            thresholdCrossed.value
-          ) {
-            thresholdCrossed.value = false;
-          }
-        })
-        .onEnd((event) => {
-          "worklet";
-          const dir = gestureDirection.value;
-          if (dir === null) {
-            isGestureActive.value = false;
-            return;
-          }
+        gestureDirection.value = nextDirection;
+      }
 
-          // Check if gesture should fire: threshold crossed OR sufficient velocity
-          let velocity = 0;
-          if (dir === "up") {
-            velocity = -event.velocityY;
-          } else if (dir === "down") {
-            velocity = event.velocityY;
-          } else if (dir === "left") {
-            velocity = -event.velocityX;
-          } else if (dir === "right") {
-            velocity = event.velocityX;
-          }
+      const direction = gestureDirection.value;
+      if (direction === null) {
+        return;
+      }
 
-          const shouldFire =
-            thresholdCrossed.value || velocity > MIN_FLING_VELOCITY;
+      const rawDistance = getPositiveDistanceForDirection(
+        direction,
+        event.translationX,
+        event.translationY
+      );
+      const rubberbanded = rubberband(rawDistance, RUBBERBAND_THRESHOLD);
 
-          if (shouldFire) {
-            scheduleOnRN(fireSwipeAction, dir);
-          }
+      rubberbandOffset.value = rubberbanded;
+      dragProgress.value = Math.min(rawDistance / RUBBERBAND_THRESHOLD, 1);
 
-          // Animate back to rest
-          dragProgress.value = withSpring(0, {
-            damping: 20,
-            stiffness: 200,
-          });
-          rubberbandOffset.value = withSpring(0, {
-            damping: 20,
-            stiffness: 200,
-          });
-          gestureDirection.value = null;
-          thresholdCrossed.value = false;
-          isGestureActive.value = false;
-        }),
-    [
-      gestureDirection,
-      dragProgress,
-      thresholdCrossed,
-      isGestureActive,
-      rubberbandOffset,
-      scrollBoundary,
-      fireSwipeAction,
-    ]
-  );
+      if (rawDistance >= RUBBERBAND_THRESHOLD && !thresholdCrossed.value) {
+        thresholdCrossed.value = true;
+        scheduleOnRN(triggerThresholdHaptic);
+      } else if (rawDistance < RUBBERBAND_THRESHOLD && thresholdCrossed.value) {
+        thresholdCrossed.value = false;
+      }
+    },
+  });
 
-  const doubleTapGesture = useMemo(
-    () =>
-      Gesture.Tap()
-        .numberOfTaps(2)
-        .maxDuration(300)
-        .onEnd(() => {
-          "worklet";
-          scheduleOnRN(fireDoubleTap);
-        }),
-    [fireDoubleTap]
-  );
+  const doubleTapGesture = useTapGesture({
+    maxDuration: 300,
+    numberOfTaps: 2,
+    onDeactivate: (_event, success) => {
+      if (success) {
+        scheduleOnRN(fireDoubleTap);
+      }
+    },
+  });
 
-  const longPressGesture = useMemo(
-    () =>
-      Gesture.LongPress()
-        .minDuration(500)
-        .onStart(() => {
-          "worklet";
-          scheduleOnRN(fireLongPress);
-        }),
-    [fireLongPress]
-  );
+  const longPressGesture = useLongPressGesture({
+    minDuration: 500,
+    onActivate: () => {
+      scheduleOnRN(fireLongPress);
+    },
+  });
 
-  // Pan takes priority. If finger moves, taps cancel.
-  // Double tap takes priority over long press.
-  const composedGesture = useMemo(
-    () => Gesture.Exclusive(panGesture, doubleTapGesture, longPressGesture),
-    [panGesture, doubleTapGesture, longPressGesture]
+  const gesture = useExclusiveGestures(
+    panGesture,
+    doubleTapGesture,
+    longPressGesture
   );
 
   return {
     dragProgress,
-    gesture: composedGesture,
+    gesture,
     gestureDirection,
     isGestureActive,
     rubberbandOffset,
   };
-}
+};

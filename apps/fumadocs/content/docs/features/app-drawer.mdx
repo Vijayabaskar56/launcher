@@ -1,0 +1,235 @@
+---
+title: App Drawer
+description: Scrollable app list with favorites, tags, per-app aliases, and a hidden-apps flow — the launcher's primary way to find and organize installed apps.
+icon: LayoutGrid
+---
+
+The app drawer is a full-screen panel that slides in from a configurable edge
+(top, bottom, left, or right) and presents every installed app. It is the
+launcher's answer to "where is my app?" when the user does not want to type a
+search query. The drawer layers three concepts on top of the raw package list:
+a **favorites** section with tag filters, the alphabetical **launcher list**,
+and a **hidden apps** vault.
+
+The implementation lives in
+[`apps/native/components/app-drawer.tsx`](https://github.com/Vijayabaskar56/launcher)
+and the supporting pieces in
+[`apps/native/components/app-drawer/`](https://github.com/Vijayabaskar56/launcher).
+The original design is tracked in the
+[drawer favorites and tags plan](../../../apps/native/docs/plans/2026-03-21-drawer-favorites-and-tags-implementation.md)
+and the
+[favorites card redesign plan](../../../apps/native/docs/plans/2026-04-05-favorites-card-redesign.md).
+
+## Data flow
+
+```
+InstalledApp (from react-native-launcher-service)
+        │
+        ▼
+AppListContext ──────┐
+                     ├──► useMemo: allApps (DrawerApp[])
+DrawerMetadataContext┘        │
+  (alias, pinned, tags,       │
+   visibility, tag order)     │
+                              ├──► sortedApps  (visibility === "default", A–Z)
+                              ├──► pinnedApps  (ordered by pinnedOrder)
+                              └──► hiddenApps  (visibility === "hidden", A–Z)
+```
+
+Each `DrawerApp` is a merge of the `InstalledApp` the
+`react-native-launcher-service` Nitro module reports and the user-editable
+metadata the launcher stores locally. The merge happens once per render in a
+memoized projection:
+
+```tsx
+const allApps = useMemo<DrawerApp[]>(
+  () =>
+    drawerMetadata
+      ? appList.apps.map((app) => {
+          const metadata = drawerMetadata.state.apps[app.packageName];
+          return {
+            ...app,
+            alias: metadata?.alias,
+            displayLabel: getDisplayLabelForApp(app, drawerMetadata.state),
+            id: app.packageName,
+            isPinned: metadata?.isPinned ?? false,
+            pinnedOrder: metadata?.pinnedOrder,
+            tagIds: metadata?.tagIds ?? [],
+            visibility: metadata?.visibility ?? "default",
+          };
+        })
+      : [],
+  [appList.apps, drawerMetadata]
+);
+```
+
+The launcher service exposes package name, label, and the icon bitmap; the
+drawer never touches the Android `PackageManager` directly — it only reads
+`AppListContext`.
+
+## Sections
+
+### Favorites (`PinnedSection`)
+
+The card at the top of the drawer shows apps the user has pinned. It contains
+two things in one frame:
+
+1. **A grid of pinned apps.** Uses the same `DrawerAppIcon` as the launcher
+   list but renders them with `isPinned` styling.
+2. **A tag tab strip.** A star tab (`ALL_PINNED_TAB`) shows every pinned app;
+   each user-created tag becomes another tab that filters `pinnedApps` down to
+   apps whose `tagIds` include the active tag. The tabs are rendered with
+   HeroUI's `Tabs` primitive inside a `Tabs.ScrollView` so long tag lists stay
+   horizontally scrollable.
+
+The empty states are context-aware: with no pinned apps it prompts the user to
+long-press an app, and with an active tag filter but no matches it explains how
+to assign the tag.
+
+An edit pencil on the right opens the `FavoritesEditSheet`, a bottom sheet
+powered by `react-native-reanimated-dnd` where the user can reorder pinned
+apps, reorder tags, create/remove tags, and toggle which apps are pinned — all
+without leaving the drawer.
+
+### Launcher list (`LauncherSection`)
+
+Every app with `visibility === "default"` (i.e. not hidden and not
+"search-only") rendered alphabetically via `sortAppsAlphabetically`, which
+wraps the stable `sortItems` helper and uses `localeCompare` on `displayLabel`.
+The grid column count comes from `LauncherConfigContext.state.gridColumns`
+(default `6`) and icon size is clamped between 44 and 60 px based on cell
+width:
+
+```tsx
+const cellWidth = Math.floor((screenWidth - 32 - 8 * (columns - 1)) / columns);
+const iconSize = Math.max(44, Math.min(60, cellWidth - 16));
+```
+
+Icon shape (`circle`, `square`, etc.) and whether labels are shown come from
+`SettingsContext.state.icons`. The drawer does not keep its own copy of these
+values — it just reads the context.
+
+### Hidden apps
+
+Apps marked `visibility === "hidden"` are excluded from both sections above.
+When at least one hidden app exists, a button appears at the bottom of the
+scroll view:
+
+```tsx
+{hiddenApps.length > 0 ? (
+  <Pressable onPress={handleOpenHidden} ...>
+    <Icon name={ICON_MAP.eyeOff} size={18} />
+    <Text>Show Hidden Apps ({hiddenApps.length})</Text>
+  </Pressable>
+) : null}
+```
+
+Tapping it opens a full-screen `Modal` with a simple list of `HiddenAppRow`s.
+Each row renders the icon, the label, and the word "Tap to unhide" — touching
+the row calls `drawerActions.setVisibility(packageName, "default")`, which
+moves the app back into the main list on the next render.
+
+A third visibility state, `"search-only"`, makes an app invisible in the
+drawer but still findable via universal [search](./search). That state is set
+from the edit sheet, not the hidden-apps modal.
+
+## Interactions
+
+### Tapping an app
+
+`handleAppPress` calls `openApplication(packageName)` from
+`expo-intent-launcher`, which dispatches an Android `ACTION_MAIN` launch
+intent. No bridging through the Nitro module is needed for the launch itself;
+the Nitro module is only responsible for listing apps and receiving package
+change broadcasts.
+
+### Long-pressing an app — `DrawerActionMenu`
+
+Long-pressing any drawer icon vibrates briefly (`Vibration.vibrate(10)`) and
+measures the icon's on-screen bounds with `measureInWindow`. Those bounds are
+stored in `DrawerActionMenuState` so the action menu can anchor itself next to
+the icon that was pressed:
+
+```tsx
+view.measureInWindow((x, y, width, height) => {
+  setActionMenu({
+    packageName: app.packageName,
+    triggerBounds: { height, width, x, y },
+  });
+});
+```
+
+`AppDrawerActionMenu` then renders a floating card (with a BlurView backdrop)
+offering: pin/unpin, rename, manage tags, change visibility, and open the full
+editor. Destructive actions use `text-danger`, submenu actions render a
+chevron.
+
+### Editing an app — `AppDrawerEditSheet`
+
+Selecting "Rename" or "Manage tags" from the action menu opens
+`AppDrawerEditSheet` in a `@gorhom/bottom-sheet` with the `focusMode` hint so
+the relevant field gets focus. The sheet edits a `DrawerEditorDraft`:
+
+```ts
+export interface DrawerEditorDraft {
+  alias: string;
+  isPinned: boolean;
+  tagIds: string[];
+  visibility: AppVisibility;
+}
+```
+
+`visibility` is a `RadioGroup` with three options: **default**,
+**search-only**, and **hidden**. Saving calls
+`drawerActions.setAlias`/`setAppTags`/`setPinned`/`setVisibility` in sequence.
+The sheet also lets the user create a new tag inline (`onCreateTag`), which
+returns the new tag id so it can be toggled on immediately.
+
+While either sheet is open, the search bar is hidden via
+`search?.actions.setHidden(true)` so it does not fight the sheet for keyboard
+focus.
+
+### Search inside the drawer
+
+The search bar lives above the drawer but writes into a context the drawer
+observes. When `searchQuery.length > 0`, the drawer swaps out its scrollable
+content for a `SearchResultsList`:
+
+```tsx
+{isSearching ? (
+  <SearchResultsList
+    results={searchResults.results}
+    actions={searchResults.actions}
+    activeFilters={searchResults.activeFilters}
+    ...
+  />
+) : (
+  <ScrollView>...</ScrollView>
+)}
+```
+
+Pressing Enter in the search bar calls the `submitRef` the drawer registered,
+which launches the top result if there is one or — when the query is empty or
+there are no matches — forwards the query to the OpenClaw topic chat. See
+the [Search](./search) page for the full search pipeline.
+
+## Gesture & layout integration
+
+The drawer is rendered inside a `GestureDetector` wrapping a directional pan
+gesture (`useDirectionalDismiss`) so the user can swipe it away in the
+direction it came from. A `useScrollDismissHandoff` coordinates the scroll
+view with the pan gesture so a vertical scroll at the top edge hands off
+naturally into a dismiss gesture.
+
+`useAnimatedReaction` watches the offset shared value and, when the panel is
+fully closed, resets scroll position, the action menu, and the edit sheet so
+the next open starts clean.
+
+## Related
+
+- [`react-native-launcher-service`](https://github.com/Vijayabaskar56/launcher/tree/main/packages/react-native-launcher-service) —
+  Nitro module that enumerates apps and emits change events.
+- [Drawer favorites and tags plan](https://github.com/Vijayabaskar56/launcher/blob/main/apps/native/docs/plans/2026-03-21-drawer-favorites-and-tags-implementation.md)
+- [Favorites card redesign plan](https://github.com/Vijayabaskar56/launcher/blob/main/apps/native/docs/plans/2026-04-05-favorites-card-redesign.md)
+- [Universal search](./search) — consumed inside the drawer when the user types
+  a query.

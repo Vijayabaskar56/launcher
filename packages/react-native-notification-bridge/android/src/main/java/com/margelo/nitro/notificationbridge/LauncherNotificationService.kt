@@ -18,12 +18,7 @@ class LauncherNotificationService : NotificationListenerService() {
         super.onListenerConnected()
         instance = this
 
-        // Process all active notifications on connect
-        val active = activeNotifications ?: return
-        for (sbn in active) {
-            notificationPostedCallback?.invoke(sbn.packageName, sbn.key)
-            checkMediaSession(sbn)
-        }
+        refreshActiveNotifications()
     }
 
     override fun onNotificationPosted(sbn: StatusBarNotification?) {
@@ -50,6 +45,15 @@ class LauncherNotificationService : NotificationListenerService() {
             mediaNotifications.clear()
             activeMediaNotificationKey = null
         }
+    }
+
+    fun refreshActiveNotifications() {
+        val active = activeNotifications ?: return
+        for (sbn in active) {
+            notificationPostedCallback?.invoke(sbn.packageName, sbn.key)
+            checkMediaSession(sbn)
+        }
+        findBestMediaSession()
     }
 
     /**
@@ -122,5 +126,9 @@ class LauncherNotificationService : NotificationListenerService() {
         // Track notifications with media sessions
         private val mediaNotifications = mutableMapOf<String, MediaNotificationInfo>()
         private var activeMediaNotificationKey: String? = null
+
+        fun refreshActiveMediaSession() {
+            instance?.refreshActiveNotifications()
+        }
     }
 }

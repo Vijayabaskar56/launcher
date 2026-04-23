@@ -1,22 +1,18 @@
 import { MaterialIcons } from "@expo/vector-icons";
 import { Stack } from "expo-router";
-import { useThemeColor } from "heroui-native";
-import { Alert, Pressable } from "react-native";
+import { Button, useThemeColor } from "heroui-native";
+
+import { toast } from "@/lib/toast";
 
 const handleAddPress = () =>
-  Alert.alert(
-    "Coming Soon",
-    "Custom themes will be available in a future update."
-  );
-
-const getAddButtonStyle = ({ pressed }: { pressed: boolean }) => ({
-  opacity: pressed ? 0.5 : 1,
-});
+  toast.info("Coming Soon", {
+    description: "Custom themes will be available in a future update.",
+  });
 
 const AddButton = () => (
-  <Pressable onPress={handleAddPress} hitSlop={8} style={getAddButtonStyle}>
+  <Button variant="ghost" isIconOnly size="sm" onPress={handleAddPress}>
     <MaterialIcons name="add" size={24} color="#ffffff" />
-  </Pressable>
+  </Button>
 );
 
 const renderAddButton = () => <AddButton />;

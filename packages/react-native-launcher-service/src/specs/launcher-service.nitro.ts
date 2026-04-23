@@ -43,4 +43,8 @@ export interface LauncherService extends HybridObject<{
   searchShortcuts(query: string): AppShortcut[];
   launchShortcut(packageName: string, shortcutId: string): void;
   readonly hasShortcutHostPermission: boolean;
+
+  // Wallpaper (Kvaesitso approach — transparent window, OS composites wallpaper)
+  setWallpaperBlurRadius(radius: number): void;
+  readonly isWallpaperBlurSupported: boolean;
 }

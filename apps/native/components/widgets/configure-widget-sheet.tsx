@@ -1,15 +1,16 @@
-import BottomSheet, { BottomSheetView } from "@gorhom/bottom-sheet";
+import { TrueSheet } from "@lodev09/react-native-true-sheet";
 import { Button } from "heroui-native";
-import { useCallback, useMemo, useRef } from "react";
+import { use, useCallback, useRef } from "react";
 import { Pressable, Text, View } from "react-native";
 
-import { WIDGET_LABELS, WIDGET_ICONS } from "@/context/widget-config";
+import {
+  WidgetConfigContext,
+  WIDGET_LABELS,
+  WIDGET_ICONS,
+  isNativeWidgetId,
+} from "@/context/widget-config";
 import type { WidgetId, WidgetSize } from "@/context/widget-config";
 
-import {
-  SHEET_TRANSLUCENT_BACKGROUND,
-  SHEET_TRANSLUCENT_HANDLE,
-} from "../ui/bottom-sheet-styles";
 import { IconAccent, ICON_MAP } from "../ui/icon";
 
 const SizeOptionButton = ({
@@ -30,16 +31,11 @@ const SizeOptionButton = ({
   return (
     <Pressable
       onPress={handlePress}
-      className="flex-1 items-center justify-center rounded-xl py-4"
-      style={{
-        backgroundColor: isActive
-          ? "rgba(255,255,255,0.15)"
-          : "rgba(255,255,255,0.05)",
-        borderColor: isActive
-          ? "rgba(255,255,255,0.3)"
-          : "rgba(255,255,255,0.08)",
-        borderWidth: 1,
-      }}
+      className={`flex-1 items-center justify-center rounded-xl py-4 border ${
+        isActive
+          ? "bg-surface-secondary border-border"
+          : "bg-surface/50 border-border/40"
+      }`}
     >
       <Text
         className={`text-sm font-semibold ${isActive ? "text-foreground" : "text-foreground/50"}`}
@@ -69,33 +65,35 @@ const ConfigureWidgetSheet = function ConfigureWidgetSheet({
   onSizeChange,
   onClose,
 }: ConfigureWidgetSheetProps) {
-  const bottomSheetRef = useRef<BottomSheet>(null);
-  const snapPoints = useMemo(() => ["45%"], []);
+  const sheetRef = useRef<TrueSheet>(null);
+  const widgetConfig = use(WidgetConfigContext);
+  const isNative = isNativeWidgetId(widgetId);
+  const widgetLabel = isNative
+    ? (widgetConfig?.state.nativeWidgets[widgetId]?.label ?? "Widget")
+    : WIDGET_LABELS[widgetId];
+  const widgetIcon = isNative
+    ? ICON_MAP.grid
+    : ICON_MAP[WIDGET_ICONS[widgetId]];
 
-  const handleSheetChange = useCallback(
-    (index: number) => {
-      if (index < 0) {
-        onClose();
-      }
-    },
-    [onClose]
-  );
+  const handleDoneClose = useCallback(() => {
+    sheetRef.current?.dismiss();
+  }, []);
 
   return (
-    <BottomSheet
-      ref={bottomSheetRef}
-      index={0}
-      snapPoints={snapPoints}
-      enablePanDownToClose
-      onChange={handleSheetChange}
-      backgroundStyle={SHEET_TRANSLUCENT_BACKGROUND}
-      handleIndicatorStyle={SHEET_TRANSLUCENT_HANDLE}
+    <TrueSheet
+      ref={sheetRef}
+      detents={[0.45]}
+      initialDetentIndex={0}
+      cornerRadius={28}
+      grabber
+      dimmed
+      onDidDismiss={onClose}
     >
-      <BottomSheetView className="flex-1 px-4 gap-5">
-        <View className="flex-row items-center justify-center gap-2 pt-2">
-          <IconAccent name={ICON_MAP[WIDGET_ICONS[widgetId]]} size={22} />
+      <View className="flex-1 px-4 gap-5 pt-2 pb-6">
+        <View className="flex-row items-center justify-center gap-2">
+          <IconAccent name={widgetIcon} size={22} />
           <Text className="text-lg font-bold text-foreground">
-            {WIDGET_LABELS[widgetId]}
+            {widgetLabel}
           </Text>
         </View>
 
@@ -118,13 +116,13 @@ const ConfigureWidgetSheet = function ConfigureWidgetSheet({
 
         <Button
           variant="secondary"
-          onPress={onClose}
+          onPress={handleDoneClose}
           className="mx-4 rounded-full"
         >
           <Button.Label>Done</Button.Label>
         </Button>
-      </BottomSheetView>
-    </BottomSheet>
+      </View>
+    </TrueSheet>
   );
 };
 

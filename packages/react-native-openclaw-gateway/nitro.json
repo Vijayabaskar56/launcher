@@ -1,0 +1,20 @@
+{
+  "$schema": "https://nitro.margelo.com/nitro.schema.json",
+  "cxxNamespace": ["openclawgateway"],
+  "ios": {
+    "iosModuleName": "NitroOpenClawGateway"
+  },
+  "android": {
+    "androidNamespace": ["openclawgateway"],
+    "androidCxxLibName": "NitroOpenClawGateway"
+  },
+  "autolinking": {
+    "OpenClawGateway": {
+      "android": {
+        "language": "kotlin",
+        "implementationClassName": "HybridOpenClawGateway"
+      }
+    }
+  },
+  "ignorePaths": ["**/node_modules"]
+}

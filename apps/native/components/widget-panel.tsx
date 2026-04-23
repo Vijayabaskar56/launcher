@@ -16,6 +16,7 @@ import { scheduleOnRN } from "react-native-worklets";
 
 import {
   WidgetConfigContext,
+  WIDGET_ICONS,
   WIDGET_LABELS,
   isNativeWidgetId,
 } from "@/context/widget-config";
@@ -32,6 +33,7 @@ import {
 import type { SlideFrom } from "@/hooks/use-directional-panel";
 import { useScrollDismissHandoff } from "@/hooks/use-scroll-dismiss-handoff";
 import { getOrderedIdsFromPositions } from "@/lib/sort";
+import { toast } from "@/lib/toast";
 
 import { Icon, IconDanger, IconMuted, ICON_MAP } from "./ui/icon";
 import { AddWidgetSheet } from "./widgets/add-widget-sheet";
@@ -67,15 +69,19 @@ const EDIT_ITEM_HEIGHT = 60;
 
 /** Inline edit row content for a single widget */
 const EditWidgetRowContent = ({
+  isNative,
   id,
   isAnimating,
   canRemove,
+  label,
   onRemove,
   onConfigure,
 }: {
+  isNative: boolean;
   id: string;
   isAnimating: boolean;
   canRemove: boolean;
+  label: string;
   onRemove: (id: WidgetId) => void;
   onConfigure: (id: WidgetId) => void;
 }) => {
@@ -96,17 +102,26 @@ const EditWidgetRowContent = ({
     >
       <Card
         variant="transparent"
-        className="flex-row items-center rounded-2xl border border-border/30 h-[56px] px-3"
-        style={{ backgroundColor: "rgba(0,0,0,0.4)" }}
+        className="flex-row items-center rounded-2xl border border-border/30 h-[56px] px-3 bg-surface/70"
       >
         <SortableItem.Handle>
           <View className="h-10 w-10 items-center justify-center">
             <IconMuted name={ICON_MAP.drag} size={18} />
           </View>
         </SortableItem.Handle>
-        <Text className="flex-1 text-sm font-semibold text-foreground">
-          {WIDGET_LABELS[widgetId] ?? widgetId}
-        </Text>
+        <View className="flex-1 flex-row items-center gap-3">
+          <IconMuted
+            name={
+              isNative
+                ? ICON_MAP.grid
+                : ICON_MAP[WIDGET_ICONS[widgetId] ?? "box"]
+            }
+            size={16}
+          />
+          <Text className="flex-1 text-sm font-semibold text-foreground">
+            {label}
+          </Text>
+        </View>
         <Pressable
           onPress={handleConfigure}
           className="h-10 w-10 items-center justify-center"
@@ -310,18 +325,18 @@ const WidgetPanel = function WidgetPanel({
   );
 
   const handleAddNativeWidget = useCallback(
-    async (provider: string) => {
+    async (provider: string, label: string) => {
       try {
         // eslint-disable-next-line unicorn/prefer-module, node/global-require
         const { widgetHostService } = require("react-native-widget-host");
         const appWidgetId =
           await widgetHostService.allocateAndBindWidget(provider);
         if (appWidgetId > 0) {
-          const label = provider.split("/").pop() ?? "Widget";
           widgetConfig?.actions.addNativeWidget(appWidgetId, provider, label);
+          toast.success("Widget added", { description: label });
         }
       } catch {
-        // User cancelled or bind failed
+        toast.error("Couldn't add widget");
       }
       setShowAddSheet(false);
     },
@@ -344,6 +359,18 @@ const WidgetPanel = function WidgetPanel({
     },
     [widgetConfig, configuringWidgetId]
   );
+
+  const resolveWidgetLabel = useCallback(
+    (id: WidgetId) => {
+      if (isNativeWidgetId(id)) {
+        return widgetConfig?.state.nativeWidgets[id]?.label ?? "Widget";
+      }
+
+      return WIDGET_LABELS[id] ?? id;
+    },
+    [widgetConfig]
+  );
+
   const renderEditItem = useCallback(
     ({
       id,
@@ -361,6 +388,8 @@ const WidgetPanel = function WidgetPanel({
           id={id}
           isAnimating={animatingId === id}
           canRemove={canRemove}
+          isNative={isNativeWidgetId(id)}
+          label={resolveWidgetLabel(id as WidgetId)}
           onConfigure={handleConfigureWidget}
           onRemove={handleRemoveWidget}
         />
@@ -372,6 +401,7 @@ const WidgetPanel = function WidgetPanel({
       handleConfigureWidget,
       handleDrop,
       handleRemoveWidget,
+      resolveWidgetLabel,
     ]
   );
 
@@ -395,8 +425,8 @@ const WidgetPanel = function WidgetPanel({
   return (
     <GestureDetector gesture={panGesture}>
       <Animated.View
-        className="absolute bottom-0 left-0 right-0 top-0"
-        style={[{ backgroundColor: "rgba(0,0,0,0.65)" }, animatedStyle]}
+        className="absolute bottom-0 left-0 right-0 top-0 bg-background/80"
+        style={[animatedStyle]}
       >
         {isEditing ? (
           <View style={{ flex: 1, paddingTop: contentPaddingTop }}>
@@ -434,6 +464,7 @@ const WidgetPanel = function WidgetPanel({
             }
             onLayout={handleScrollLayout}
             onScroll={handleScroll}
+            removeClippedSubviews
             scrollEventThrottle={16}
             showsVerticalScrollIndicator={false}
           >
@@ -476,8 +507,7 @@ const WidgetPanel = function WidgetPanel({
           {isEditing && (
             <Pressable
               onPress={handleOpenAddSheet}
-              className="flex-row items-center gap-2 rounded-full px-5 py-2.5"
-              style={{ backgroundColor: "rgba(255,255,255,0.12)" }}
+              className="flex-row items-center gap-2 rounded-full px-5 py-2.5 bg-surface-secondary"
             >
               <Icon name={ICON_MAP.add} size={16} />
               <Text className="text-sm font-semibold text-foreground">
@@ -487,8 +517,7 @@ const WidgetPanel = function WidgetPanel({
           )}
           <Pressable
             onPress={handleToggleEdit}
-            className="flex-row items-center gap-2 rounded-full px-5 py-2.5"
-            style={{ backgroundColor: "rgba(255,255,255,0.15)" }}
+            className="flex-row items-center gap-2 rounded-full px-5 py-2.5 bg-surface-secondary"
           >
             <Icon
               name={isEditing ? ICON_MAP.checkCircle : ICON_MAP.edit}

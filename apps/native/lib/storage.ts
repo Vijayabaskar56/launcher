@@ -43,12 +43,3 @@ export const setSettings = (settings: LauncherSettingsData): void => {
   storage.set(SETTINGS_KEY, JSON.stringify(settings));
   storage.set(SCHEMA_VERSION_KEY, CURRENT_SCHEMA_VERSION);
 };
-
-export const updateSettings = (
-  updater: (current: LauncherSettingsData) => LauncherSettingsData
-): LauncherSettingsData => {
-  const current = getSettings();
-  const next = updater(current);
-  setSettings(next);
-  return next;
-};

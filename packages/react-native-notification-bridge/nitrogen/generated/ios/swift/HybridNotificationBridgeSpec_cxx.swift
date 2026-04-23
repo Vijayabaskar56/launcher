@@ -127,6 +127,13 @@ open class HybridNotificationBridgeSpec_cxx {
       return self.__implementation.isNotificationListenerEnabled
     }
   }
+  
+  public final var canSeek: Bool {
+    @inline(__always)
+    get {
+      return self.__implementation.canSeek
+    }
+  }
 
   // Methods
   @inline(__always)
@@ -211,6 +218,18 @@ open class HybridNotificationBridgeSpec_cxx {
   }
   
   @inline(__always)
+  public final func getPlaybackPosition() -> bridge.Result_double_ {
+    do {
+      let __result = try self.__implementation.getPlaybackPosition()
+      let __resultCpp = __result
+      return bridge.create_Result_double_(__resultCpp)
+    } catch (let __error) {
+      let __exceptionPtr = __error.toCpp()
+      return bridge.create_Result_double_(__exceptionPtr)
+    }
+  }
+  
+  @inline(__always)
   public final func play() -> bridge.Result_void_ {
     do {
       try self.__implementation.play()
@@ -225,6 +244,17 @@ open class HybridNotificationBridgeSpec_cxx {
   public final func pause() -> bridge.Result_void_ {
     do {
       try self.__implementation.pause()
+      return bridge.create_Result_void_()
+    } catch (let __error) {
+      let __exceptionPtr = __error.toCpp()
+      return bridge.create_Result_void_(__exceptionPtr)
+    }
+  }
+  
+  @inline(__always)
+  public final func seekTo(positionMs: Double) -> bridge.Result_void_ {
+    do {
+      try self.__implementation.seekTo(positionMs: positionMs)
       return bridge.create_Result_void_()
     } catch (let __error) {
       let __exceptionPtr = __error.toCpp()

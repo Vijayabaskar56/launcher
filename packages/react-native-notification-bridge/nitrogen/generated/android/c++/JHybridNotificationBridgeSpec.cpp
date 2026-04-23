@@ -60,6 +60,11 @@ namespace margelo::nitro::notificationbridge {
     auto __result = method(_javaPart);
     return static_cast<bool>(__result);
   }
+  bool JHybridNotificationBridgeSpec::getCanSeek() {
+    static const auto method = _javaPart->javaClassStatic()->getMethod<jboolean()>("getCanSeek");
+    auto __result = method(_javaPart);
+    return static_cast<bool>(__result);
+  }
 
   // Methods
   void JHybridNotificationBridgeSpec::openNotificationListenerSettings() {
@@ -82,6 +87,11 @@ namespace margelo::nitro::notificationbridge {
     static const auto method = _javaPart->javaClassStatic()->getMethod<void(jni::alias_ref<JFunc_void_PlaybackState::javaobject> /* callback */)>("onPlaybackStateChanged_cxx");
     method(_javaPart, JFunc_void_PlaybackState_cxx::fromCpp(callback));
   }
+  double JHybridNotificationBridgeSpec::getPlaybackPosition() {
+    static const auto method = _javaPart->javaClassStatic()->getMethod<double()>("getPlaybackPosition");
+    auto __result = method(_javaPart);
+    return __result;
+  }
   void JHybridNotificationBridgeSpec::play() {
     static const auto method = _javaPart->javaClassStatic()->getMethod<void()>("play");
     method(_javaPart);
@@ -89,6 +99,10 @@ namespace margelo::nitro::notificationbridge {
   void JHybridNotificationBridgeSpec::pause() {
     static const auto method = _javaPart->javaClassStatic()->getMethod<void()>("pause");
     method(_javaPart);
+  }
+  void JHybridNotificationBridgeSpec::seekTo(double positionMs) {
+    static const auto method = _javaPart->javaClassStatic()->getMethod<void(double /* positionMs */)>("seekTo");
+    method(_javaPart, positionMs);
   }
   void JHybridNotificationBridgeSpec::skipToNext() {
     static const auto method = _javaPart->javaClassStatic()->getMethod<void()>("skipToNext");

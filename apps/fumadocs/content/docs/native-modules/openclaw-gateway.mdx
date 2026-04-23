@@ -1,0 +1,226 @@
+---
+title: OpenClaw Gateway
+description: TLS-pinned WebSocket transport to an OpenClaw agent backend — setup codes, trust-on-first-use fingerprints, and scoped JSON-RPC.
+icon: Plug
+---
+
+`react-native-openclaw-gateway` is the launcher's bridge to an
+[OpenClaw](https://github.com) agent backend. It opens a persistent
+WebSocket, performs a TLS fingerprint pinning dance, runs a scoped
+handshake, and then exposes a single generic `request(method, params)`
+RPC surface that the JS side uses for chat, agent discovery, and session
+listing.
+
+Unlike the other four modules, this one has nothing to do with Android
+launcher APIs — it's a networking module. It lives here because the
+launcher's chat/topic integration needs a native TLS stack to pin
+self-signed fingerprints, which is not something you can do reliably from
+JavaScript.
+
+## Purpose
+
+- Parse base64url-encoded setup codes and manual endpoint URLs.
+- Probe remote TLS fingerprints on first contact.
+- Store and look up trusted fingerprints by stable endpoint ID.
+- Manage the WebSocket lifecycle (connect / disconnect / reconnect).
+- Forward scoped JSON-RPC calls to the gateway and return the raw JSON
+  response as a string.
+
+## Install location
+
+Workspace package at `packages/react-native-openclaw-gateway`.
+
+## TypeScript API
+
+```ts
+import { openClawGateway } from "react-native-openclaw-gateway";
+
+export interface OpenClawEndpointConfig {
+  host: string;
+  port: number;
+  tls: boolean;
+  displayUrl: string;
+}
+
+export interface OpenClawSetupCodeConfig {
+  url: string;
+  bootstrapToken: string | undefined;
+  token: string | undefined;
+  password: string | undefined;
+  endpoint: OpenClawEndpointConfig;
+}
+
+export interface OpenClawTlsProbeResult {
+  fingerprintSha256: string | undefined;
+  failureCode: string | undefined;
+}
+
+export interface OpenClawConnectionSnapshot {
+  isConnected: boolean;
+  endpointId: string | undefined;
+  endpointUrl: string | undefined;
+  mainSessionKey: string | undefined;
+}
+
+export interface OpenClawGateway {
+  parseSetupCode(raw: string): OpenClawSetupCodeConfig | undefined;
+  parseEndpoint(raw: string): OpenClawEndpointConfig | undefined;
+
+  probeTlsFingerprint(
+    host: string,
+    port: number
+  ): Promise<OpenClawTlsProbeResult>;
+  saveTrustedFingerprint(stableId: string, fingerprintSha256: string): void;
+  getTrustedFingerprint(stableId: string): string | undefined;
+  clearTrustedFingerprint(stableId: string): void;
+
+  connect(configJson: string): void;
+  disconnect(): void;
+  reconnect(): void;
+  getConnectionSnapshot(): OpenClawConnectionSnapshot;
+
+  request(
+    rpcMethod: string,
+    paramsJson?: string,
+    timeoutMs?: number
+  ): Promise<string>;
+}
+```
+
+`request()` takes pre-serialized JSON and returns a pre-serialized JSON
+string. This is deliberate: the native side does not try to be a typed
+router. All RPC schemas live in TypeScript, validated with Zod on the JS
+side, and the native layer just moves bytes.
+
+## Transport
+
+The gateway speaks WebSocket — either `ws://` (cleartext) or `wss://`
+(TLS). Cleartext is intentionally **only allowed** for:
+
+- localhost / loopback
+- the Android emulator alias `10.0.2.2`
+- private LAN hosts
+- `.local` mDNS hosts
+
+Any remote (public-IP or routable) endpoint is forced to TLS. This
+policy is enforced inside `GatewayHostSecurity.kt`; bypassing it is not
+possible from JS.
+
+## TLS trust flow (trust-on-first-use)
+
+Public CA validation is unsuitable for a self-hosted agent backend, so
+the gateway uses a fingerprint-pinning model:
+
+1. **First contact.** JS calls `probeTlsFingerprint(host, port)`. The
+   native code opens a raw TLS socket, reads the leaf certificate,
+   computes SHA-256, and returns it — **without completing a WebSocket
+   upgrade**.
+2. **User confirmation.** The JS app shows the fingerprint to the user
+   (first/last groups, short friendly form) and waits for explicit
+   acceptance.
+3. **Persist.** On accept, call
+   `saveTrustedFingerprint(stableId, fingerprintSha256)`. The stable ID
+   is derived from the endpoint identity (host + port + TLS flag) so
+   that a single backend survives DNS changes, LAN moves, and restarts.
+4. **Subsequent connects.** `connect()` pins against the stored
+   fingerprint via a custom `X509TrustManager` installed on the
+   OkHttp/WebSocket client. A mismatch fails the handshake loudly
+   instead of silently upgrading trust.
+
+`clearTrustedFingerprint(stableId)` is exposed for "forget this backend"
+user flows.
+
+## Connect handshake
+
+Connecting is not just "open the socket and start calling methods":
+
+1. `connect(configJson)` — JS passes a blob containing the endpoint,
+   auth inputs, and requested scopes.
+2. Native opens the WebSocket and **waits** for a `connect.challenge`
+   event carrying a `nonce`.
+3. Native responds with a `connect` RPC including:
+   - `minProtocol` / `maxProtocol`
+   - `client` descriptor
+   - `role`
+   - optional `scopes`, `caps`, `commands`, `permissions`
+   - `auth` (see precedence below)
+   - optional `device`
+   - `locale` / optional `userAgent`
+4. The server returns `server.host`, `auth.deviceToken`, `auth.role`,
+   `auth.scopes`, and optionally `snapshot.sessionDefaults.mainSessionKey`.
+
+**Auth input precedence** (matches the Android reference client):
+
+1. explicit token
+2. explicit bootstrap token
+3. explicit password
+4. stored device token for the same role
+
+The launcher connects as:
+
+- `role: "operator"`
+- `scopes: ["operator.read", "operator.write", "operator.talk.secrets"]`
+
+## Supported RPCs (launcher v1)
+
+All of the following are confirmed to work under the default operator
+scopes and are what the launcher currently uses:
+
+| Method          | Scope            | Purpose                                                                                              |
+| --------------- | ---------------- | ---------------------------------------------------------------------------------------------------- |
+| `health`        | `operator.read`  | Reachability / health probe.                                                                         |
+| `agents.list`   | `operator.read`  | Enumerate available agents. Response: `{ defaultId, mainKey, agents[] }`.                            |
+| `sessions.list` | `operator.read`  | List chat sessions. Params: `{ includeGlobal: true, includeUnknown: false, limit? }`.                |
+| `chat.history`  | `operator.read`  | Load messages for a `sessionKey`. Supports `limit` and `maxChars`.                                   |
+| `chat.send`     | `operator.write` | Send a message. Minimum params: `sessionKey`, `message`, `idempotencyKey`. Returns at least `runId`. |
+| `chat.abort`    | `operator.write` | Abort an in-flight run for a `sessionKey` (optional `runId`).                                        |
+
+`sessions.patch` and `sessions.delete` **exist** on the gateway but
+require `operator.admin`, which the default launcher scope bundle does
+not request. Remote topic rename and remote delete are therefore
+**disabled** in launcher v1 — local topic metadata is the source of
+truth, and a local delete always succeeds immediately. Widening to
+`operator.admin` would be an explicit future decision.
+
+## Agent session-key namespacing
+
+There is no `agents.bind` or `agent.init` RPC. Agent selection is
+instead encoded directly into the session key namespace:
+
+- Plain launcher topics use unscoped keys like `topic-123`.
+- Agent-bound topics use `agent:<agentId>:<rest>`, e.g.
+  `agent:gpt5-fast:topic-123`.
+- The canonical "main" key for an agent is `agent:<agentId>:main`.
+
+The gateway's server-side helper `toAgentStoreSessionKey()` performs
+this rewrite automatically when you call `chat.send` or `chat.history`
+with an already-scoped key. The launcher only needs to construct the
+right key at send time.
+
+## Android implementation notes
+
+The Kotlin side is split across several files in
+`packages/react-native-openclaw-gateway/android/.../openclawgateway/`:
+
+- `GatewayConfigResolver.kt` — parses setup codes and manual endpoint
+  strings; normalizes to `OpenClawEndpointConfig`.
+- `GatewayHostSecurity.kt` — enforces cleartext-only-on-LAN and computes
+  the stable endpoint identity used as the fingerprint store key.
+- `GatewayTls.kt` — performs the `probeTlsFingerprint()` handshake and
+  builds the custom `X509TrustManager` used by the WebSocket client.
+- `GatewaySession.kt` — owns the WebSocket lifecycle, the
+  `connect.challenge`/`connect` handshake, JSON-RPC framing, and the
+  pending-request registry keyed by request ID.
+- `DeviceAuthStore.kt` / `DeviceIdentityStore.kt` — encrypted storage
+  for the device token and stable device identity used during
+  `connect`.
+- `HybridOpenClawGateway.kt` — the Nitro entry point, a thin facade over
+  the above.
+
+## Planning docs
+
+- Protocol contract (what RPCs exist, what params/responses look like):
+  `apps/native/docs/openclaw-gateway-protocol.md`
+- Launcher-side integration plan for chat/topic UI on top of this
+  module:
+  `apps/native/docs/plans/2026-04-05-openclaw-topic-chat-integration.md`

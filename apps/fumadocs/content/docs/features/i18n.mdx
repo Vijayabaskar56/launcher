@@ -1,0 +1,55 @@
+---
+title: Localization
+description: Locale resolution, time format, measurement system, and calendar detection.
+---
+
+The launcher currently ships English strings but is localized for
+user-visible _data_: time format, measurement system (used by the weather
+widget), and calendar system (Gregorian, Hijri, Persian). All three resolve
+automatically from the device's locale via
+[`expo-localization`](https://docs.expo.dev/versions/latest/sdk/localization/).
+
+## The `useResolvedLocale` hook
+
+`hooks/use-locale.ts` wraps `expo-localization`'s `getLocales()` and
+`getCalendars()` and returns a flattened `ResolvedLocale` object:
+
+```ts
+{
+  timeFormat: "12h" | "24h",
+  measurementSystem: "metric" | "uk" | "us",
+  calendar: "gregorian" | "hijri" | "persian",
+  languageCode: string,
+  regionCode: string | null,
+}
+```
+
+- **Time format** comes from `calendars[0].uses24hourClock`.
+- **Measurement system** comes from `locales[0].measurementSystem`, mapped
+  to `"metric" | "uk" | "us"` (defaulting to metric).
+- **Calendar** is derived from `calendars[0].calendar`. Every `islamic*`
+  variant (`islamic`, `islamic-civil`, `islamic-rgsa`, `islamic-tbla`,
+  `islamic-umalqura`) collapses to a single `"hijri"` bucket; `"persian"`
+  passes through; everything else falls back to `"gregorian"`.
+
+## Overridable settings with system fallback
+
+Every setting that depends on locale is stored as a three-state enum
+(e.g. `TimeFormat = "system" | "12h" | "24h"`) so the user can either pin
+the behavior or let it follow the device. Three resolver helpers turn a
+stored setting into its concrete value:
+
+- `resolveTimeFormat(setting)` returns `"12h"` or `"24h"`.
+- `resolveMeasurementSystem(setting)` returns `"metric" | "uk" | "us"`.
+- `resolveCalendar(setting)` returns `"gregorian" | "hijri" | "persian" | "none"`.
+
+Each resolver short-circuits when the stored setting isn't `"system"`,
+otherwise it delegates to the matching private helper in the same file.
+This keeps the resolution logic in exactly one place and makes it safe to
+call from non-hook contexts (e.g. pure data formatters in the clock and
+weather widgets).
+
+## Related files
+
+- `apps/native/hooks/use-locale.ts`
+- `apps/native/docs/plans/2026-03-30-i18n-implementation.md`

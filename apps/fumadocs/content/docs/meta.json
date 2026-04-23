@@ -1,0 +1,11 @@
+{
+  "title": "Launcher",
+  "pages": [
+    "index",
+    "architecture",
+    "---Native Modules---",
+    "native-modules",
+    "---Features---",
+    "features"
+  ]
+}

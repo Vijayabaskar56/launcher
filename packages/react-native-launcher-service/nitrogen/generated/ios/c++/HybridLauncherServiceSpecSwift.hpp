@@ -75,6 +75,9 @@ namespace margelo::nitro::launcherservice {
     inline bool getHasShortcutHostPermission() noexcept override {
       return _swiftPart.hasShortcutHostPermission();
     }
+    inline bool getIsWallpaperBlurSupported() noexcept override {
+      return _swiftPart.isWallpaperBlurSupported();
+    }
 
   public:
     // Methods
@@ -132,6 +135,12 @@ namespace margelo::nitro::launcherservice {
     }
     inline void launchShortcut(const std::string& packageName, const std::string& shortcutId) override {
       auto __result = _swiftPart.launchShortcut(packageName, shortcutId);
+      if (__result.hasError()) [[unlikely]] {
+        std::rethrow_exception(__result.error());
+      }
+    }
+    inline void setWallpaperBlurRadius(double radius) override {
+      auto __result = _swiftPart.setWallpaperBlurRadius(std::forward<decltype(radius)>(radius));
       if (__result.hasError()) [[unlikely]] {
         std::rethrow_exception(__result.error());
       }

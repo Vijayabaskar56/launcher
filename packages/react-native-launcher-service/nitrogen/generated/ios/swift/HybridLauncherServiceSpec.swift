@@ -11,6 +11,7 @@ import NitroModules
 public protocol HybridLauncherServiceSpec_protocol: HybridObject {
   // Properties
   var hasShortcutHostPermission: Bool { get }
+  var isWallpaperBlurSupported: Bool { get }
 
   // Methods
   func getInstalledApps() throws -> [AppInfo]
@@ -21,6 +22,7 @@ public protocol HybridLauncherServiceSpec_protocol: HybridObject {
   func getShortcuts(packageName: String) throws -> [AppShortcut]
   func searchShortcuts(query: String) throws -> [AppShortcut]
   func launchShortcut(packageName: String, shortcutId: String) throws -> Void
+  func setWallpaperBlurRadius(radius: Double) throws -> Void
 }
 
 public extension HybridLauncherServiceSpec_protocol {

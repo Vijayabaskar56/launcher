@@ -1,4 +1,4 @@
-import { Surface } from "heroui-native";
+import { Card } from "heroui-native";
 import type { ReactNode } from "react";
 import { Text } from "react-native";
 
@@ -21,10 +21,13 @@ const WidgetCard = function WidgetCard({
   const sizeConfig = WIDGET_SIZES[size];
 
   return (
-    <Surface
-      className={`gap-2 p-4 ${sizeConfig.width === "full" ? "w-full" : "w-[48%]"}`}
-      variant="default"
-      style={{ minHeight: sizeConfig.height, opacity }}
+    <Card
+      variant="transparent"
+      className="w-full rounded-2xl border border-border/40 p-4 gap-2 bg-surface/70"
+      style={{
+        minHeight: sizeConfig.height,
+        opacity,
+      }}
     >
       {title ? (
         <Text className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
@@ -32,7 +35,7 @@ const WidgetCard = function WidgetCard({
         </Text>
       ) : null}
       {children}
-    </Surface>
+    </Card>
   );
 };
 

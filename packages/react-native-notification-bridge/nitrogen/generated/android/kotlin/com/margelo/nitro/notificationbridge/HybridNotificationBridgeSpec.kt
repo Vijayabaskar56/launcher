@@ -28,6 +28,10 @@ abstract class HybridNotificationBridgeSpec: HybridObject() {
   @get:DoNotStrip
   @get:Keep
   abstract val isNotificationListenerEnabled: Boolean
+  
+  @get:DoNotStrip
+  @get:Keep
+  abstract val canSeek: Boolean
 
   // Methods
   @DoNotStrip
@@ -72,11 +76,19 @@ abstract class HybridNotificationBridgeSpec: HybridObject() {
   
   @DoNotStrip
   @Keep
+  abstract fun getPlaybackPosition(): Double
+  
+  @DoNotStrip
+  @Keep
   abstract fun play(): Unit
   
   @DoNotStrip
   @Keep
   abstract fun pause(): Unit
+  
+  @DoNotStrip
+  @Keep
+  abstract fun seekTo(positionMs: Double): Unit
   
   @DoNotStrip
   @Keep

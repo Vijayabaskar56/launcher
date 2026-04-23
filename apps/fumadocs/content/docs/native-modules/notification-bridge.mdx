@@ -1,0 +1,129 @@
+---
+title: Notification Bridge
+description: NotificationListenerService-backed bridge for badge counts and media session transport controls.
+icon: Bell
+---
+
+`react-native-notification-bridge` exposes Android's notification stream and
+active media session to React Native. The launcher uses it for two things:
+
+1. **Badge counts** — the little "3" on the Gmail icon.
+2. **Now playing** — metadata, album art, and transport controls for the
+   foreground media session (used by the music widget).
+
+## Purpose
+
+Android does not give regular apps access to other apps' notifications.
+Reading the notification stream requires registering a
+[`NotificationListenerService`](https://developer.android.com/reference/android/service/notification/NotificationListenerService)
+and asking the user to enable it in Settings > Notifications > Notification
+access. Once granted, the service receives every `StatusBarNotification`
+posted or removed system-wide, and gets a `MediaSessionManager` handle that
+can drive the currently active media session.
+
+## Install location
+
+Workspace package at `packages/react-native-notification-bridge`.
+
+## TypeScript API
+
+```ts
+import { notificationBridge } from "react-native-notification-bridge";
+
+export interface MediaMetadata {
+  title: string | undefined;
+  artist: string | undefined;
+  album: string | undefined;
+  albumArtPath: string | undefined;
+  /** Duration in ms, -1 if unknown */
+  duration: number;
+  packageName: string;
+}
+
+export type PlaybackState = "playing" | "paused" | "stopped" | "none";
+
+export interface NotificationBridge {
+  // Permission
+  readonly isNotificationListenerEnabled: boolean;
+  openNotificationListenerSettings(): void;
+
+  // Badge events (raw — JS aggregates per-package counts)
+  onNotificationPosted(
+    callback: (packageName: string, key: string) => void
+  ): void;
+  onNotificationRemoved(callback: (key: string) => void): void;
+
+  // Media session (push model — native drives updates)
+  onMediaMetadataChanged(
+    callback: (metadata: MediaMetadata | undefined) => void
+  ): void;
+  onPlaybackStateChanged(callback: (state: PlaybackState) => void): void;
+
+  // Transport controls
+  play(): void;
+  pause(): void;
+  skipToNext(): void;
+  skipToPrevious(): void;
+}
+```
+
+The badge API is deliberately "raw". The native side emits a `(packageName,
+key)` tuple for each `onNotificationPosted` and a bare `key` for each
+`onNotificationRemoved`; JavaScript maintains a `Map<packageName, Set<key>>`
+and derives per-package badge counts from set size. This keeps the native
+surface tiny and makes deduping, filtering (silent channels), and test
+harnesses trivial in JS.
+
+## JS-side hook
+
+Badge aggregation lives in a React context (`NotificationBadgesContext`)
+that's wired to `onNotificationPosted` / `onNotificationRemoved` on mount. A
+consumer component uses:
+
+```ts
+// apps/native/hooks/use-notification-badge.ts
+import { use } from "react";
+import { NotificationBadgesContext } from "@/context/notification-badges";
+
+export const useNotificationBadge = (packageName: string): number => {
+  const { getBadgeCount } = use(NotificationBadgesContext);
+  return getBadgeCount(packageName);
+};
+```
+
+## Android implementation notes
+
+- **Permission probing.** `isNotificationListenerEnabled` reads
+  `Settings.Secure.getString(..., "enabled_notification_listeners")` and
+  splits on `:` — the standard pattern, since Android does not expose a
+  proper API.
+- **`LauncherNotificationService`** is a subclass of
+  `NotificationListenerService`. It stores a static `instance` reference on
+  `onListenerConnected()` so the HybridObject can reach it from JS calls.
+- **Replay on subscribe.** When JS registers `onNotificationPosted`, the
+  HybridObject immediately iterates `service.activeNotifications` and fires
+  the callback for each one, so the JS-side state rehydrates on reload.
+- **`MediaSessionHandler`** owns a `MediaSessionManager` + a
+  `NotificationListenerService` component name (required for the media
+  session API to trust us). It registers an `OnActiveSessionsChangedListener`,
+  picks the topmost active `MediaController`, and forwards
+  `MediaMetadata` + `PlaybackState` updates to the JS callbacks. Album art
+  is decoded and cached to a file path, matching the `getAppIcon` pattern.
+- **Transport controls** (`play`, `pause`, `skipToNext`, `skipToPrevious`)
+  call through to `mediaController.transportControls`.
+
+## Permissions & setup
+
+1. Declare `LauncherNotificationService` in `AndroidManifest.xml` with the
+   `android.permission.BIND_NOTIFICATION_LISTENER_SERVICE` permission and the
+   `android.service.notification.NotificationListenerService` intent filter.
+2. On first run, call `openNotificationListenerSettings()` to send the user
+   directly to the system toggle.
+3. Poll `isNotificationListenerEnabled` when the app returns to the
+   foreground to detect when the user grants (or revokes) access.
+
+## Planning doc
+
+Detailed design notes, the badge aggregation strategy, and the music-widget
+wiring are tracked in
+`apps/native/docs/plans/2026-03-30-notification-bridge-implementation.md`.

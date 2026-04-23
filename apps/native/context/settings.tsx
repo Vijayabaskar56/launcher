@@ -1,19 +1,9 @@
-import {
-  createContext,
-  useCallback,
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
-} from "react";
-import { Appearance } from "react-native";
-import { Uniwind } from "uniwind";
+import { createContext, useCallback, useMemo, useState } from "react";
 
+import { useThemeSync } from "@/hooks/use-theme-sync";
 import { getSettings, setSettings } from "@/lib/storage";
 import { DEFAULT_SETTINGS } from "@/types/settings";
 import type {
-  ColorScheme,
-  ThemePreset,
   DebugSettings,
   GestureSettings,
   HomescreenSettings,
@@ -155,59 +145,7 @@ export const SettingsProvider = ({
   );
 
   // Apply Uniwind theme whenever preset or color scheme changes
-  // Guard: track last applied theme to prevent re-set loops
-  // (Uniwind.setTheme can trigger Appearance change events on some devices)
-  const lastAppliedThemeRef = useRef("");
-
-  useEffect(() => {
-    const resolveMode = (scheme: ColorScheme): "light" | "dark" => {
-      if (scheme === "system") {
-        return Appearance.getColorScheme() === "light" ? "light" : "dark";
-      }
-      return scheme;
-    };
-
-    const resolveThemeName = (
-      preset: ThemePreset,
-      mode: "light" | "dark"
-    ): string => {
-      if (preset === "default") {
-        return mode;
-      }
-      if (preset === "high-contrast") {
-        return `high-contrast-${mode}`;
-      }
-      if (preset === "black-and-white") {
-        return `bw-${mode}`;
-      }
-      return mode;
-    };
-
-    const applyTheme = (themeName: string) => {
-      if (lastAppliedThemeRef.current === themeName) {
-        return;
-      }
-      lastAppliedThemeRef.current = themeName;
-      Uniwind.setTheme(themeName as Parameters<typeof Uniwind.setTheme>[0]);
-    };
-
-    const mode = resolveMode(state.appearance.colorScheme);
-    const themeName = resolveThemeName(state.appearance.themePreset, mode);
-    applyTheme(themeName);
-
-    // Listen for system appearance changes when scheme is "system"
-    if (state.appearance.colorScheme === "system") {
-      const listener = Appearance.addChangeListener(({ colorScheme }) => {
-        const newMode = colorScheme === "light" ? "light" : "dark";
-        const newTheme = resolveThemeName(
-          state.appearance.themePreset,
-          newMode
-        );
-        applyTheme(newTheme);
-      });
-      return () => listener.remove();
-    }
-  }, [state.appearance.themePreset, state.appearance.colorScheme]);
+  useThemeSync(state.appearance.themePreset, state.appearance.colorScheme);
 
   const value = useMemo(
     () => ({

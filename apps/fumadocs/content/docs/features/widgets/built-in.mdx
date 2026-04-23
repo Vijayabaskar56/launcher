@@ -1,0 +1,234 @@
+---
+title: Built-in widgets
+description: Clock, Calendar, Weather, Music, and Battery — data sources, refresh strategies, and animations.
+---
+
+The launcher ships with five first-party JS widgets. Each one is a small
+component that reads from a dedicated hook, renders inside a
+[`WidgetCard`](/docs/features/widgets#widget-cards), and respects the
+`WidgetSize` (`small` / `medium` / `large`) chosen in the configure sheet.
+
+## Clock
+
+Source:
+
+- `apps/native/components/widgets/clock-widget.tsx`
+- `apps/native/hooks/use-clock.ts`
+- `apps/native/components/clock-styles/digital-clock.tsx`
+- `apps/native/components/clock-styles/analog-clock.tsx`
+
+The clock widget displays the current time and — at medium size — the
+formatted date below it. Whether seconds are shown is driven by the
+`homescreen.showSeconds` setting.
+
+### Zero re-render design
+
+`useClock` is deliberately built to avoid React re-renders on every tick. The
+timestamp is stored in a Reanimated `SharedValue`, and the formatted string
+is a `useDerivedValue` whose output is piped into an
+`Animated.TextInput` via `useAnimatedProps`:
+
+```ts
+const timeAnimatedProps = useAnimatedProps(() => ({
+  defaultValue: formattedTime.value,
+  text: formattedTime.value,
+}));
+```
+
+Only the displayed date string (which changes at most once per day) is kept
+in React state. Hour / minute / second rotation values are also exposed as
+derived shared values so the analog clock face can animate its hands on the
+UI thread.
+
+### Refresh strategy
+
+A `setTimeout` loop aligns to the next second boundary — rather than running
+at a fixed interval — so the displayed time updates cleanly at each second
+rollover. Timezone offset is re-read on every tick so DST transitions are
+handled.
+
+### Sizing
+
+- `small` — compact `DigitalClock` variant, no date row.
+- `medium` / `large` — full-size digital clock plus date line.
+
+## Calendar
+
+Source:
+
+- `apps/native/components/widgets/calendar-widget.tsx`
+- `apps/native/components/widgets/calendar/week-strip.tsx`
+- `apps/native/components/widgets/calendar/event-list.tsx`
+- `apps/native/hooks/use-calendar-events.ts`
+
+This widget was recently redesigned (see
+`docs/plans/2026-04-07-calendar-widget-redesign-design.md`) to replace a
+static month grid with a dynamic week view backed by the device calendar.
+
+### Layout
+
+- **Header** — month / year (`Intl.DateTimeFormat`) and a "Today" chip that
+  fades in when the selected date differs from today.
+- **Week strip** — 7 day pills in a horizontal row. Pan left/right past a
+  60 px threshold to shift the visible week by ±7 days. The selection pill
+  animates via `withTiming` on a shared `translateX`, easing
+  `Easing.out(Easing.cubic)` over 280 ms.
+- **Event list** — rendered only at medium and above; a nested rounded card
+  with a bottom linear-gradient fade and `FadeIn` entrances per row.
+
+### Data source
+
+`useCalendarEvents` uses [`expo-calendar`](https://docs.expo.dev/versions/latest/sdk/calendar/)
+to fetch events for the visible week ±1 week of buffer, groups them by
+`YYYY-MM-DD`, and pre-formats each event's time string using the
+user's locale (12 h / 24 h derived from `use-locale`). A permission state is
+cached under the MMKV key `calendar-permission-state` so the widget can
+render the empty "Connect calendar" state without hitting the native bridge
+on every mount.
+
+### Refresh strategy
+
+Events are re-fetched:
+
+- When the `weekAnchor` changes (user swiped weeks).
+- When the app returns to the foreground
+  (`AppState.addEventListener("change", ...)`).
+
+A monotonic `fetchTokenRef` guards against stale responses from in-flight
+fetches being applied after a newer one has started.
+
+### Animations
+
+Powered by [Reanimated](https://docs.swmansion.com/react-native-reanimated/):
+
+- Selection pill: `useSharedValue` + `withTiming`.
+- Week swipe: `Gesture.Pan()` driving a shared `translateX` with
+  `withSpring({ damping: 22, stiffness: 180 })`.
+- Event rows: `FadeIn` layout-animation entrances.
+
+## Weather
+
+Source:
+
+- `apps/native/components/widgets/weather-widget.tsx`
+- `apps/native/hooks/use-weather.ts`
+- `apps/native/lib/weather-api.ts`
+
+Displays current conditions, humidity, wind, precipitation, and — at larger
+sizes — hourly and daily forecast strips.
+
+### Data source
+
+`weather-api.ts` supports two providers, selectable from the integrations
+settings:
+
+- **Met.no** (`https://api.met.no/weatherapi/locationforecast/2.0/compact`)
+  — default, free, no API key.
+- **OpenWeatherMap** (`https://api.openweathermap.org/data/2.5/weather`) —
+  requires an API key from integration settings. Falls through to Met.no if
+  the key is missing.
+
+If the provider is set to `none`, the widget renders an "Unavailable"
+placeholder. Network requests use `react-native-nitro-fetch`.
+
+### Refresh strategy
+
+`useWeather` calls the provider on mount and then every 30 minutes
+(`setInterval`). It also re-fetches when the provider, API key, manual
+location, or `autoLocation` flag changes. Current coordinates default to San
+Francisco as a placeholder until `expo-location` is wired in.
+
+### Sizing
+
+- `small` — location (truncated), weather icon, and large temperature.
+- `medium` / `large` — full layout with stats row, hourly strip, and daily
+  strip, all rendered from the same `WeatherData` payload.
+
+## Music (Now Playing)
+
+Source:
+
+- `apps/native/components/widgets/music-widget.tsx`
+- `apps/native/hooks/use-now-playing.ts`
+
+Shows the currently playing track from any media-session-aware app,
+controlled through the launcher's `react-native-notification-bridge` module
+(a lazy `require()` so the app still renders if it is unavailable).
+
+### Data source
+
+The bridge exposes:
+
+```ts
+interface NotificationBridge {
+  readonly isNotificationListenerEnabled: boolean;
+  openNotificationListenerSettings: () => void;
+  onMediaMetadataChanged: (cb: (m: MediaMetadata | undefined) => void) => void;
+  onPlaybackStateChanged: (cb: (state: PlaybackState) => void) => void;
+  play: () => void;
+  pause: () => void;
+  skipToNext: () => void;
+  skipToPrevious: () => void;
+}
+```
+
+`useNowPlaying` subscribes to metadata and playback-state callbacks from the
+native side and estimates the playback position locally between ticks.
+
+### States
+
+The widget renders three distinct states:
+
+1. **No permission** — tap the card to open Android's notification listener
+   settings.
+2. **No track** — "Nothing playing" placeholder.
+3. **Playing** — title, artist, album art, a disabled `Slider` used as a
+   progress bar, transport controls, and (at medium+) shuffle / more icons.
+
+### Animations
+
+Title and artist are wrapped in `Animated.Text` with `FadeIn` / `FadeOut`
+keyed on the current string, so track changes cross-fade smoothly. The outer
+row uses `LinearTransition.duration(250)` so layout shifts (e.g. art
+appearing) tween rather than snap.
+
+### Sizing
+
+- `small` — title only, no artist, no progress bar, fewer transport icons.
+- `medium` / `large` — full metadata, progress bar with time labels, and
+  all transport controls.
+
+## Battery
+
+Source:
+
+- `apps/native/components/widgets/battery-widget.tsx`
+- `apps/native/hooks/use-battery.ts`
+
+A thin wrapper around `expo-battery`:
+
+```ts
+const rawLevel = useBatteryLevel();
+const state = useBatteryState();
+const level = rawLevel >= 0 ? Math.round(rawLevel * 100) : 0;
+```
+
+### Display
+
+- A large "N%" tabular-nums number on the left.
+- A battery glyph on the right.
+- At medium / large, a status line: _Charging_, _Full_, _On Battery_, or
+  _Unknown_, mapped from `BatteryState`.
+
+Refresh is driven entirely by the `expo-battery` hooks, which emit updates
+from the OS — no manual polling.
+
+### Sizing
+
+- `small` — hides the status label and uses a smaller font and icon.
+- `medium` / `large` — full layout.
+
+## References
+
+- [expo-calendar](https://docs.expo.dev/versions/latest/sdk/calendar/)
+- [React Native Reanimated](https://docs.swmansion.com/react-native-reanimated/)

@@ -1,0 +1,111 @@
+---
+title: Accessibility Actions
+description: Global system actions (lock, notifications, quick settings, recents, power menu) exposed through an AccessibilityService.
+icon: Hand
+---
+
+`react-native-accessibility-actions` lets the launcher trigger system-level
+actions that regular apps cannot perform: locking the screen, pulling down
+the notification shade, opening the recents overview, and showing the power
+menu. These are useful as gesture targets — swipe down for notifications,
+double-tap to lock, and so on.
+
+## Purpose
+
+Android intentionally restricts global system actions to
+[`AccessibilityService`](https://developer.android.com/guide/topics/ui/accessibility/service)
+subclasses, because an app that could (for example) dismiss arbitrary
+notifications or show the power menu on command would be a clear abuse
+vector. The tradeoff is that the user has to explicitly enable the launcher's
+accessibility service in Settings, with the usual scary warning screen.
+
+Once enabled, the service exposes `performGlobalAction(...)` — a single
+sanctioned API that maps directly to the actions below.
+
+## Install location
+
+Workspace package at `packages/react-native-accessibility-actions`.
+
+## TypeScript API
+
+```ts
+import { accessibilityActions } from "react-native-accessibility-actions";
+
+export interface AccessibilityActions {
+  lockScreen(): void;
+  openNotifications(): void;
+  openQuickSettings(): void;
+  openRecents(): void;
+  showPowerMenu(): void;
+  readonly isAccessibilityEnabled: boolean;
+  openAccessibilitySettings(): void;
+}
+```
+
+Each action is a thin wrapper around
+`AccessibilityService.performGlobalAction()`:
+
+| JS method             | Android constant                      |
+| --------------------- | ------------------------------------- |
+| `lockScreen()`        | `GLOBAL_ACTION_LOCK_SCREEN` (API 28+) |
+| `openNotifications()` | `GLOBAL_ACTION_NOTIFICATIONS`         |
+| `openQuickSettings()` | `GLOBAL_ACTION_QUICK_SETTINGS`        |
+| `openRecents()`       | `GLOBAL_ACTION_RECENTS`               |
+| `showPowerMenu()`     | `GLOBAL_ACTION_POWER_DIALOG`          |
+
+## Android implementation notes
+
+The Kotlin side is small and direct. `LauncherAccessibilityService` is an
+`AccessibilityService` subclass that stores itself in a `companion object`
+static field (`LauncherAccessibilityService.instance`) on
+`onServiceConnected()`. It does **not** handle any accessibility events —
+the `onAccessibilityEvent` callback is a no-op, and the service exists
+purely as an API gateway.
+
+`HybridAccessibilityActions.kt`:
+
+- `isAccessibilityEnabled` reads
+  `Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES` and string-matches against
+  `"${packageName}/${LauncherAccessibilityService::class.java.canonicalName}"`.
+- `openAccessibilitySettings()` fires
+  `Settings.ACTION_ACCESSIBILITY_SETTINGS` with `FLAG_ACTIVITY_NEW_TASK`.
+- Every action method calls `getServiceOrThrow()`, which returns the cached
+  `LauncherAccessibilityService.instance` or throws with a "please enable
+  accessibility" message if the user hasn't granted permission yet.
+
+Because each action routes through `performGlobalAction`, the service itself
+needs almost no configuration — just the standard
+`<service>` declaration in the manifest pointing at an
+`accessibility_service_config.xml` resource with `canPerformGestures="false"`
+and the `flagDefault` flag.
+
+## Permission UX
+
+The launcher uses a staged permission flow:
+
+1. On first launch (or when a gesture is bound to a restricted action), show
+   a rationale screen explaining what the accessibility service does and
+   does not do — specifically, that it does not read screen content.
+2. Call `openAccessibilitySettings()` to drop the user into the exact
+   settings page.
+3. Poll `isAccessibilityEnabled` when the app resumes to detect when the
+   user finishes granting access, then dismiss the prompt.
+
+## How the launcher uses it
+
+The gesture system (see `apps/native/hooks/use-homescreen-gestures.ts`) lets
+users bind these actions to:
+
+- Swipe down on the home screen → `openNotifications()` or
+  `openQuickSettings()`.
+- Double-tap → `lockScreen()`.
+- Long-press → `showPowerMenu()`.
+- A dedicated gesture → `openRecents()`.
+
+Because every method is synchronous and calls through to a native system
+API, latency is indistinguishable from a stock launcher.
+
+## External reference
+
+- [AccessibilityService overview](https://developer.android.com/guide/topics/ui/accessibility/service)
+- [`performGlobalAction` reference](<https://developer.android.com/reference/android/accessibilityservice/AccessibilityService#performGlobalAction(int)>)

@@ -1,0 +1,313 @@
+---
+title: OpenClaw Protocol
+description: Wire contract between the launcher and the OpenClaw gateway server.
+---
+
+This page is the launcher-facing reference for the OpenClaw gateway protocol. It is
+derived from `apps/native/docs/openclaw-gateway-protocol.md`, which was validated
+against the gateway server sources and the Android reference client. Do not invent
+RPCs not listed here — if a method is not confirmed below, it is not part of the
+launcher v1 contract.
+
+See also: [OpenClaw feature overview](/docs/features/openclaw) and the native
+transport module [react-native-openclaw-gateway](/docs/native-modules/openclaw-gateway).
+
+## Setup codes
+
+Setup codes are **base64url-encoded JSON** with the shape:
+
+```ts
+interface OpenClawSetupCode {
+  url: string;
+  bootstrapToken?: string;
+  token?: string;
+  password?: string;
+}
+```
+
+The native module's `parseSetupCode()` decodes the blob and the launcher then feeds
+the `url` through the manual endpoint normalizer. Any of `bootstrapToken`, `token`,
+or `password` become inputs to the connect handshake's `auth` field.
+
+## Endpoint normalization
+
+Manual endpoint parsing normalizes any input to:
+
+```ts
+interface OpenClawEndpointConfig {
+  host: string;
+  port: number;
+  tls: boolean;
+  displayUrl: string;
+}
+```
+
+### Cleartext rules
+
+<Callout type="warn">
+Cleartext `ws://` / `http://` is **only** allowed for:
+
+- `localhost` / loopback
+- The Android emulator alias `10.0.2.2`
+- Private LAN hosts
+- `.local` hosts
+
+Any remote non-LAN endpoint **must** use TLS. The native host-security layer rejects
+cleartext remote connects before any socket is opened.
+
+</Callout>
+
+## TLS fingerprint pinning
+
+1. First secure connect to an unknown endpoint must **not** connect directly.
+2. The client calls `probeTlsFingerprint(host, port)` to fetch the remote cert
+   fingerprint.
+3. The fingerprint is surfaced to JS and the user explicitly accepts or rejects it.
+4. Accepted fingerprints are persisted in secure storage keyed by a stable endpoint
+   identity.
+5. Later secure connects **pin** against the stored fingerprint; a mismatch fails
+   the connect instead of re-prompting silently.
+
+## Connect handshake
+
+The transport is not "open a websocket and send RPCs". The handshake is:
+
+1. Open the websocket.
+2. Wait for a `connect.challenge` event carrying a `nonce`.
+3. Send the `connect` RPC.
+
+### `connect` params
+
+```ts
+interface OpenClawConnectParams {
+  minProtocol: number;
+  maxProtocol: number;
+  client: { name: string; version: string };
+  role: "operator";
+  scopes?: string[];
+  caps?: unknown;
+  commands?: unknown;
+  permissions?: unknown;
+  auth?: {
+    token?: string;
+    bootstrapToken?: string;
+    password?: string;
+    // ...stored deviceToken for the role if available
+  };
+  device?: { id?: string; name?: string };
+  locale: string;
+  userAgent?: string;
+}
+```
+
+Auth input precedence (matches the Android reference client):
+
+1. Explicit token
+2. Explicit bootstrap token
+3. Explicit password
+4. Stored device token for the same role
+
+The launcher always connects as **operator** and requests these scopes:
+
+- `operator.read`
+- `operator.write`
+- `operator.talk.secrets`
+
+### `connect` response
+
+```ts
+interface OpenClawConnectResult {
+  server: { host: string };
+  auth: {
+    deviceToken: string;
+    role: "operator";
+    scopes: string[];
+    deviceTokens?: Record<string, string>;
+  };
+  canvasHostUrl?: string;
+  snapshot?: {
+    sessionDefaults?: { mainSessionKey?: string };
+  };
+}
+```
+
+The returned `deviceToken` is persisted in secure storage and reused on later
+connects for the same role.
+
+## Confirmed RPCs (launcher v1)
+
+All RPCs go through the native module's `request(method, paramsJson?, timeoutMs?)`
+passthrough and return a JSON string. The shapes below are what the launcher
+actually reads.
+
+### `health`
+
+- **Scope:** `operator.read`
+- **Params:** none
+- Used as a reachability/liveness probe.
+
+### `agents.list`
+
+- **Scope:** `operator.read`
+- **Params:** `{}` is valid
+
+```ts
+interface AgentsListResult {
+  defaultId: string;
+  mainKey: string;
+  agents: Array<{
+    id: string;
+    name?: string;
+    identity?: { emoji?: string };
+  }>;
+}
+```
+
+### `chat.history`
+
+- **Scope:** `operator.read`
+
+```ts
+interface ChatHistoryParams {
+  sessionKey: string;
+  limit?: number;
+  maxChars?: number;
+}
+
+interface ChatHistoryResult {
+  sessionKey: string;
+  sessionId?: string;
+  messages: Array<unknown>; // shape normalized by lib/openclaw/chat.ts
+  thinkingLevel?: number;
+  fastMode?: boolean;
+  verboseLevel?: number;
+}
+```
+
+### `chat.send`
+
+- **Scope:** `operator.write`
+
+```ts
+interface ChatSendParams {
+  sessionKey: string;
+  message: string;
+  idempotencyKey: string;
+  thinking?: unknown;
+  timeoutMs?: number;
+  attachments?: Array<{
+    type: string;
+    mimeType: string;
+    fileName: string;
+    content: string;
+  }>;
+}
+
+interface ChatSendResult {
+  runId: string;
+  // ...other fields ignored by the launcher
+}
+```
+
+<Callout type="warn">
+  The gateway handler accepts additional admin-only origin / provenance fields
+  on `chat.send`. Launcher v1 **must not** set them.
+</Callout>
+
+The launcher only relies on `runId` from the response.
+
+### `chat.abort`
+
+- **Scope:** `operator.write`
+
+```ts
+interface ChatAbortParams {
+  sessionKey: string;
+  runId?: string;
+}
+```
+
+Wired through the native module for future chat controls.
+
+### `sessions.list`
+
+- **Scope:** `operator.read`
+
+```ts
+interface SessionsListParams {
+  includeGlobal?: boolean; // launcher passes true
+  includeUnknown?: boolean; // launcher passes false
+  limit?: number;
+}
+
+interface SessionsListResult {
+  sessions: Array<{
+    key: string;
+    updatedAt?: number;
+    displayName?: string;
+  }>;
+}
+```
+
+## Scopes
+
+| Scope                   | Used for                                                 |
+| ----------------------- | -------------------------------------------------------- |
+| `operator.read`         | `health`, `agents.list`, `chat.history`, `sessions.list` |
+| `operator.write`        | `chat.send`, `chat.abort`                                |
+| `operator.talk.secrets` | Authorized access to secret-bearing chats                |
+
+## Not in v1 scope
+
+The following methods exist on the gateway but require `operator.admin`, which the
+launcher does **not** request. They are deliberately excluded from v1.
+
+### `sessions.patch` (admin-only)
+
+Validated schema supports `label` plus other admin/session fields. This is what a
+remote topic rename/sync would use. Because the launcher does not hold
+`operator.admin`, **remote topic rename is disabled** and local topic labels are the
+source of truth.
+
+### `sessions.delete` (admin-only)
+
+```ts
+interface SessionsDeleteParams {
+  key: string;
+  deleteTranscript?: boolean;
+  emitLifecycleHooks?: boolean;
+}
+```
+
+Main sessions cannot be deleted. The launcher performs **local topic delete only**;
+remote delete is a no-op in v1.
+
+If scopes are later widened to `operator.admin`, rename/delete can be added behind
+that explicit scope decision.
+
+## Agent session-key namespace
+
+There is **no** agent-init RPC. The gateway treats agent selection as part of the
+session-key namespace. Canonical forms:
+
+```
+agent:<agentId>:<rest>
+agent:<agentId>:main
+```
+
+Server helpers such as `toAgentStoreSessionKey()` convert a raw request key like
+`topic-123` into `agent:<agentId>:topic-123`.
+
+**Launcher rules:**
+
+- Do not invent `agents.bind`, `agent.init`, or similar RPCs.
+- Agent-bound topics bind by choosing an agent-scoped `sessionKey` on first send.
+- Non-agent topics use plain launcher session keys.
+
+## Fallback rules
+
+- Local topics are the source of truth for topic labels.
+- Local topic delete always succeeds immediately.
+- Remote topic rename is disabled by default.
+- Remote topic delete is disabled by default.
+- Agent binding is implemented via session-key construction, not a separate RPC.

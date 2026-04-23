@@ -78,6 +78,10 @@ const SettingsLayout = () => {
         }}
       />
       <Stack.Screen
+        name="openclaw"
+        options={{ title: "OpenClaw Connection" }}
+      />
+      <Stack.Screen
         name="plugins"
         options={{
           headerRight: renderAddHeaderRight,

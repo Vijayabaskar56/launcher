@@ -1,0 +1,195 @@
+---
+title: Widgets
+description: The widget panel, sizing, edit mode, persistence, and the bridge to native Android app widgets.
+---
+
+The launcher exposes a vertical **widget panel** that slides in from the edge of
+the home screen. It hosts two kinds of widgets:
+
+1. **Built-in JS widgets** — rendered entirely in React Native (Clock,
+   Calendar, Weather, Music, Battery). See
+   [Built-in widgets](/docs/features/widgets/built-in).
+2. **Native Android app widgets** — third-party home-screen widgets from
+   installed apps, embedded via `react-native-widget-host`.
+
+## The widget panel
+
+Source: `apps/native/components/widget-panel.tsx`
+
+The panel is a full-screen overlay that slides in from a configurable edge
+(top / bottom / left / right). It is driven by a `SharedValue<number>` offset
+that the home screen's gesture system animates. The same component handles two
+modes:
+
+- **Display mode** — a vertical `ScrollView` of widget cards.
+- **Edit mode** — a sortable list (`react-native-reanimated-dnd`) with
+  drag handles, configure, and remove buttons.
+
+```tsx
+const WIDGET_MAP: Record<
+  WidgetId,
+  React.ComponentType<{ opacity?: number; size?: WidgetSize }>
+> = {
+  battery: BatteryWidget,
+  calendar: CalendarWidget,
+  clock: ClockWidget,
+  music: MusicWidget,
+  weather: WeatherWidget,
+};
+```
+
+Each entry in the user's active widget list is rendered by looking it up in
+`WIDGET_MAP`, or — if the ID has a `native:` prefix — by delegating to
+`NativeWidgetCard`.
+
+### Gesture integration
+
+The panel cooperates with the home-screen dismissal gestures through
+`useDirectionalPanel` and `useDirectionalDismiss`. It tracks whether the inner
+scroll view is at its top or bottom via two `SharedValue<boolean>` boundary
+signals, so the outer pan gesture only takes over the drag when the scroll has
+reached its edge. When the panel fully closes, an `useAnimatedReaction` snaps
+the scroll position back to 0.
+
+## Widget cards
+
+Source: `apps/native/components/widgets/widget-card.tsx`
+
+All built-in widgets render inside a `WidgetCard` wrapper: a translucent
+rounded-corner card with an optional title, and a `minHeight` driven by the
+widget's configured `WidgetSize`.
+
+```tsx
+const sizeConfig = WIDGET_SIZES[size];
+// ...
+<Card
+  variant="transparent"
+  style={{
+    backgroundColor: "rgba(255,255,255,0.08)",
+    minHeight: sizeConfig.height,
+    opacity,
+  }}
+>
+  {children}
+</Card>;
+```
+
+Three sizes are defined in `context/widget-config.tsx`:
+
+| Size     | Height |
+| -------- | ------ |
+| `small`  | 120 px |
+| `medium` | 180 px |
+| `large`  | 240 px |
+
+Each widget inspects the `size` prop and may hide detail rows (for example,
+the calendar hides its event list when `size === "small"`).
+
+## Native widget card
+
+Source: `apps/native/components/widgets/native-widget-card.tsx`
+
+Third-party Android app widgets are hosted via
+[`react-native-widget-host`](https://www.npmjs.com/package/react-native-widget-host).
+The module is `require()`d lazily at module scope so that Metro's cache avoids
+repeated IPC and so the app degrades gracefully if the module is unavailable
+(a fallback "App widget failed to load" card is shown).
+
+```tsx
+let ResolvedNativeView: React.ComponentType<Record<string, unknown>> | null =
+  null;
+try {
+  ResolvedNativeView = require("react-native-widget-host").NativeAppWidgetView;
+} catch {
+  // Module not available
+}
+```
+
+When available, the card embeds the host's `NativeAppWidgetView` and passes
+`appWidgetId`, `widgetWidth: -1` (match parent), and `widgetHeight` taken from
+the current `WidgetSize`.
+
+## Adding widgets
+
+Source: `apps/native/components/widgets/add-widget-sheet.tsx`
+
+The add-widget bottom sheet lists both the built-in widgets and — grouped by
+app — the providers returned by `widgetHostService.getInstalledProviders()`.
+Selecting a built-in entry calls `actions.addWidget(id)`. Selecting a native
+provider calls:
+
+```ts
+const { widgetHostService } = require("react-native-widget-host");
+const appWidgetId = await widgetHostService.allocateAndBindWidget(provider);
+if (appWidgetId > 0) {
+  widgetConfig.actions.addNativeWidget(appWidgetId, provider, label);
+}
+```
+
+`allocateAndBindWidget` triggers the Android system permission / configuration
+flow; on cancellation the error is swallowed and nothing is added.
+
+## Configuring widgets
+
+Source: `apps/native/components/widgets/configure-widget-sheet.tsx`
+
+Tapping the settings icon on an edit-mode row opens the configure sheet. It
+currently exposes the `WidgetSize` choice (Small / Medium / Large). The
+selected size is written through `actions.setWidgetSize(id, size)`.
+
+## Drag, reorder, and remove
+
+Edit mode uses `Sortable` / `SortableItem` from
+`react-native-reanimated-dnd`. On drop, the new positions are converted to an
+ordered ID list (`getOrderedIdsFromPositions`) and persisted via
+`actions.reorderWidgets`. Removal animates a 200 ms opacity fade before
+calling `actions.removeWidget`. The last remaining widget cannot be removed
+(`canRemove = activeWidgetIds.length > 1`).
+
+## Persistence: `WidgetConfigContext`
+
+Source: `apps/native/context/widget-config.tsx`
+
+All widget state is stored in a single React context, persisted to
+`expo-secure-store` under the key `widget-config`. The state shape is:
+
+```ts
+interface WidgetConfigState {
+  activeWidgetIds: WidgetId[];
+  widgetOpacity: number;
+  widgetOrder: WidgetId[];
+  widgetSizes: Record<WidgetId, WidgetSize>;
+  nativeWidgets: Record<string, NativeWidgetInfo>;
+}
+```
+
+- `activeWidgetIds` — which widgets are currently on the panel.
+- `widgetOrder` — the stable ordering (drag-and-drop writes here).
+- `widgetSizes` — per-widget size selection.
+- `widgetOpacity` — a global 0–1 opacity applied to all widget cards.
+- `nativeWidgets` — metadata (`appWidgetId`, `provider`, `label`) for each
+  native host ID of the form `native:<appWidgetId>`.
+
+On load, a `sanitizeState` helper validates and falls back to defaults so a
+corrupted payload never crashes the app. All mutations go through a single
+`persist(updater)` helper that updates state and writes to SecureStore in one
+pass.
+
+### Built-in vs native IDs
+
+```ts
+export const isNativeWidgetId = (id: string): boolean =>
+  id.startsWith("native:");
+export const getNativeWidgetKey = (appWidgetId: number): string =>
+  `native:${appWidgetId}`;
+```
+
+This is the single source of truth for distinguishing the two kinds of
+widgets throughout the panel.
+
+## Related plans
+
+- `apps/native/docs/plans/2026-03-21-widget-panel-implementation.md` —
+  original widget-panel plan.
+- `apps/native/docs/plans/2026-03-31-widget-host-implementation.md` —
+  native `react-native-widget-host` integration plan.

@@ -55,6 +55,7 @@ namespace margelo::nitro::launcherservice {
     public:
       // Properties
       virtual bool getHasShortcutHostPermission() = 0;
+      virtual bool getIsWallpaperBlurSupported() = 0;
 
     public:
       // Methods
@@ -66,6 +67,7 @@ namespace margelo::nitro::launcherservice {
       virtual std::vector<AppShortcut> getShortcuts(const std::string& packageName) = 0;
       virtual std::vector<AppShortcut> searchShortcuts(const std::string& query) = 0;
       virtual void launchShortcut(const std::string& packageName, const std::string& shortcutId) = 0;
+      virtual void setWallpaperBlurRadius(double radius) = 0;
 
     protected:
       // Hybrid Setup

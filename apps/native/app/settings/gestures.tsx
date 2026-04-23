@@ -1,10 +1,11 @@
 import { MaterialIcons } from "@expo/vector-icons";
 import { useThemeColor } from "heroui-native";
-import { use, useCallback, useState } from "react";
+import { use, useCallback, useRef, useState } from "react";
 import { Image, Pressable, ScrollView, Text, View } from "react-native";
 
 import { AppPickerSheet } from "@/components/settings/app-picker-sheet";
 import { GestureActionSheet } from "@/components/settings/gesture-action-sheet";
+import type { GestureActionSheetHandle } from "@/components/settings/gesture-action-sheet";
 import { PreferenceCategory } from "@/components/settings/preference-category";
 import { AppListContext } from "@/context/app-list";
 import { SettingsContext } from "@/context/settings";
@@ -127,9 +128,30 @@ const GestureRow = ({
 
 // --- Main Screen ---
 
+const renderGestureList = (
+  gestures: Record<string, GestureAction>,
+  configs: GestureRowConfig[],
+  getAppInfo: (key: GestureKey) => { appIcon?: string; appLabel?: string },
+  handleOpenSheet: (key: GestureKey, label: string) => void
+) =>
+  configs.map((config) => {
+    const { appIcon, appLabel } = getAppInfo(config.key);
+    return (
+      <GestureRow
+        key={config.key}
+        config={config}
+        currentAction={gestures[config.key] as GestureAction}
+        appLabel={appLabel}
+        appIcon={appIcon}
+        onPress={() => handleOpenSheet(config.key, config.label)}
+      />
+    );
+  });
+
 export default function GesturesSettings() {
   const settings = use(SettingsContext);
   const appList = use(AppListContext);
+  const actionSheetRef = useRef<GestureActionSheetHandle>(null);
   const [activeGestureKey, setActiveGestureKey] = useState<GestureKey | null>(
     null
   );
@@ -139,9 +161,13 @@ export default function GesturesSettings() {
   const handleOpenSheet = useCallback((key: GestureKey, label: string) => {
     setActiveGestureKey(key);
     setActiveGestureLabel(label);
+    requestAnimationFrame(() => {
+      actionSheetRef.current?.present();
+    });
   }, []);
 
   const handleCloseSheet = useCallback(() => {
+    actionSheetRef.current?.dismiss();
     setActiveGestureKey(null);
     setActiveGestureLabel("");
   }, []);
@@ -152,9 +178,11 @@ export default function GesturesSettings() {
         return;
       }
       settings.actions.updateGestures({ [activeGestureKey]: action });
-      handleCloseSheet();
+      actionSheetRef.current?.dismiss();
+      setActiveGestureKey(null);
+      setActiveGestureLabel("");
     },
-    [settings, activeGestureKey, handleCloseSheet]
+    [settings, activeGestureKey]
   );
 
   const handleSelectLaunchApp = useCallback(() => {
@@ -211,40 +239,26 @@ export default function GesturesSettings() {
         contentContainerStyle={{ gap: 20, paddingBottom: 40, paddingTop: 8 }}
       >
         <PreferenceCategory title="Swipe Gestures">
-          {SWIPE_GESTURES.map((config) => {
-            const { appIcon, appLabel } = getAppInfo(config.key);
-            return (
-              <GestureRow
-                key={config.key}
-                config={config}
-                currentAction={gestures[config.key] as GestureAction}
-                appLabel={appLabel}
-                appIcon={appIcon}
-                onPress={() => handleOpenSheet(config.key, config.label)}
-              />
-            );
-          })}
+          {renderGestureList(
+            gestures,
+            SWIPE_GESTURES,
+            getAppInfo,
+            handleOpenSheet
+          )}
         </PreferenceCategory>
 
         <PreferenceCategory title="Tap Gestures">
-          {TAP_GESTURES.map((config) => {
-            const { appIcon, appLabel } = getAppInfo(config.key);
-            return (
-              <GestureRow
-                key={config.key}
-                config={config}
-                currentAction={gestures[config.key] as GestureAction}
-                appLabel={appLabel}
-                appIcon={appIcon}
-                onPress={() => handleOpenSheet(config.key, config.label)}
-              />
-            );
-          })}
+          {renderGestureList(
+            gestures,
+            TAP_GESTURES,
+            getAppInfo,
+            handleOpenSheet
+          )}
         </PreferenceCategory>
       </ScrollView>
 
       <GestureActionSheet
-        gestureKey={activeGestureKey}
+        ref={actionSheetRef}
         gestureLabel={activeGestureLabel}
         currentAction={currentAction}
         onSelect={handleSelectAction}

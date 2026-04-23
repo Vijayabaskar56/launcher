@@ -127,6 +127,13 @@ open class HybridLauncherServiceSpec_cxx {
       return self.__implementation.hasShortcutHostPermission
     }
   }
+  
+  public final var isWallpaperBlurSupported: Bool {
+    @inline(__always)
+    get {
+      return self.__implementation.isWallpaperBlurSupported
+    }
+  }
 
   // Methods
   @inline(__always)
@@ -252,6 +259,17 @@ open class HybridLauncherServiceSpec_cxx {
   public final func launchShortcut(packageName: std.string, shortcutId: std.string) -> bridge.Result_void_ {
     do {
       try self.__implementation.launchShortcut(packageName: String(packageName), shortcutId: String(shortcutId))
+      return bridge.create_Result_void_()
+    } catch (let __error) {
+      let __exceptionPtr = __error.toCpp()
+      return bridge.create_Result_void_(__exceptionPtr)
+    }
+  }
+  
+  @inline(__always)
+  public final func setWallpaperBlurRadius(radius: Double) -> bridge.Result_void_ {
+    do {
+      try self.__implementation.setWallpaperBlurRadius(radius: radius)
       return bridge.create_Result_void_()
     } catch (let __error) {
       let __exceptionPtr = __error.toCpp()

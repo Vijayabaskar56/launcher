@@ -31,10 +31,13 @@ export interface NotificationBridge extends HybridObject<{
     callback: (metadata: MediaMetadata | undefined) => void
   ): void;
   onPlaybackStateChanged(callback: (state: PlaybackState) => void): void;
+  readonly canSeek: boolean;
+  getPlaybackPosition(): number;
 
   // Transport controls
   play(): void;
   pause(): void;
+  seekTo(positionMs: number): void;
   skipToNext(): void;
   skipToPrevious(): void;
 }

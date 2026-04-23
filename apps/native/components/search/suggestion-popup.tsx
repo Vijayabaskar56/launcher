@@ -28,7 +28,7 @@ function PersonRow({
       onPress={onPress}
       style={({ pressed }) => ({
         alignItems: "center",
-        backgroundColor: pressed ? "rgba(255,255,255,0.06)" : "transparent",
+        backgroundColor: pressed ? "rgba(127,127,127,0.12)" : "transparent",
         flexDirection: "row",
         gap: 10,
         paddingHorizontal: 14,
@@ -44,7 +44,7 @@ function PersonRow({
         <View
           style={{
             alignItems: "center",
-            backgroundColor: "rgba(255,255,255,0.08)",
+            backgroundColor: "rgba(127,127,127,0.16)",
             borderRadius: 14,
             height: 28,
             justifyContent: "center",
@@ -75,7 +75,7 @@ function FilterRow({
       onPress={onPress}
       style={({ pressed }) => ({
         alignItems: "center",
-        backgroundColor: pressed ? "rgba(255,255,255,0.06)" : "transparent",
+        backgroundColor: pressed ? "rgba(127,127,127,0.12)" : "transparent",
         flexDirection: "row",
         gap: 10,
         paddingHorizontal: 14,
@@ -102,7 +102,7 @@ function EmojiRow({
       onPress={onPress}
       style={({ pressed }) => ({
         alignItems: "center",
-        backgroundColor: pressed ? "rgba(255,255,255,0.06)" : "transparent",
+        backgroundColor: pressed ? "rgba(127,127,127,0.12)" : "transparent",
         flexDirection: "row",
         gap: 10,
         paddingHorizontal: 14,
@@ -131,7 +131,7 @@ function CommandRow({
       onPress={onPress}
       style={({ pressed }) => ({
         alignItems: "center",
-        backgroundColor: pressed ? "rgba(255,255,255,0.06)" : "transparent",
+        backgroundColor: pressed ? "rgba(127,127,127,0.12)" : "transparent",
         flexDirection: "row",
         gap: 10,
         paddingHorizontal: 14,
@@ -171,6 +171,9 @@ function SuggestionItem({
     case "command": {
       return <CommandRow data={suggestion.data} onPress={handlePress} />;
     }
+    default: {
+      return null;
+    }
   }
 }
 
@@ -181,8 +184,6 @@ export const SuggestionPopup = memo(function SuggestionPopup({
   suggestions: Suggestion[];
   onSelect: (suggestion: Suggestion) => void;
 }) {
-  const surface = useThemeColor("surface");
-
   if (suggestions.length === 0) {
     return null;
   }
@@ -191,18 +192,17 @@ export const SuggestionPopup = memo(function SuggestionPopup({
     <Animated.View
       entering={FadeIn.duration(120)}
       exiting={FadeOut.duration(80)}
+      className="bg-background/80 border border-border/40"
       style={{
-        backgroundColor: surface,
-        borderColor: "rgba(255,255,255,0.08)",
-        borderRadius: 12,
-        borderWidth: 1,
+        borderCurve: "continuous",
+        borderRadius: 20,
         marginHorizontal: 4,
         overflow: "hidden",
       }}
     >
-      {suggestions.map((s, i) => (
+      {suggestions.map((s) => (
         <SuggestionItem
-          key={`${s.type}-${i}`}
+          key={`${s.type}-${s.label ?? s.type}`}
           suggestion={s}
           onSelect={onSelect}
         />

@@ -46,9 +46,6 @@ export const useWeather = ({
     setFetchError(null);
 
     try {
-      // For now, use default coordinates
-      // eslint-disable-next-line no-warning-comments
-      // TODO: Wire up expo-location for autoLocation support
       const lat = DEFAULT_LAT;
       const lon = DEFAULT_LON;
       const locationName =

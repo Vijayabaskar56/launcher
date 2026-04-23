@@ -72,6 +72,9 @@ namespace margelo::nitro::notificationbridge {
     inline bool getIsNotificationListenerEnabled() noexcept override {
       return _swiftPart.isNotificationListenerEnabled();
     }
+    inline bool getCanSeek() noexcept override {
+      return _swiftPart.getCanSeek();
+    }
 
   public:
     // Methods
@@ -105,6 +108,14 @@ namespace margelo::nitro::notificationbridge {
         std::rethrow_exception(__result.error());
       }
     }
+    inline double getPlaybackPosition() override {
+      auto __result = _swiftPart.getPlaybackPosition();
+      if (__result.hasError()) [[unlikely]] {
+        std::rethrow_exception(__result.error());
+      }
+      auto __value = std::move(__result.value());
+      return __value;
+    }
     inline void play() override {
       auto __result = _swiftPart.play();
       if (__result.hasError()) [[unlikely]] {
@@ -113,6 +124,12 @@ namespace margelo::nitro::notificationbridge {
     }
     inline void pause() override {
       auto __result = _swiftPart.pause();
+      if (__result.hasError()) [[unlikely]] {
+        std::rethrow_exception(__result.error());
+      }
+    }
+    inline void seekTo(double positionMs) override {
+      auto __result = _swiftPart.seekTo(std::forward<decltype(positionMs)>(positionMs));
       if (__result.hasError()) [[unlikely]] {
         std::rethrow_exception(__result.error());
       }

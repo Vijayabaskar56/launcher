@@ -86,11 +86,6 @@ export const useClock = (showSeconds = false) => {
   const formattedTime = useDerivedValue(() => {
     const local = localTimestamp.value;
 
-    if (!showSeconds) {
-      // Only update when minute changes
-      const _minuteKey = Math.floor(local / 60_000);
-    }
-
     return formatTimeWorklet(local, showSeconds);
   });
 

@@ -1,11 +1,16 @@
-import type { BottomSheetBackdropProps } from "@gorhom/bottom-sheet";
-import BottomSheet, {
-  BottomSheetBackdrop,
-  BottomSheetScrollView,
-} from "@gorhom/bottom-sheet";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { TrueSheet } from "@lodev09/react-native-true-sheet";
+import {
+  Card,
+  Chip,
+  Label,
+  Radio,
+  RadioGroup,
+  useThemeColor,
+} from "heroui-native";
+import { useCallback, useRef, useState } from "react";
 import {
   Pressable,
+  ScrollView,
   Text,
   TextInput,
   useWindowDimensions,
@@ -24,6 +29,7 @@ import type {
 } from "react-native-reanimated-dnd";
 
 import type { DrawerTag } from "@/context/drawer-metadata";
+import { useTrueSheetVisibility } from "@/hooks/use-true-sheet-visibility";
 
 import { AppIcon } from "../app-icon";
 import { Icon, IconMuted, ICON_MAP } from "../ui/icon";
@@ -118,32 +124,25 @@ const TagChip = ({
   }, [onToggle, tag.id]);
 
   return (
-    <Pressable
+    <Chip
       onPress={handlePress}
-      className={`rounded-full px-3.5 py-2.5 border flex-row items-center gap-1.5 ${
+      variant={isSelected ? "primary" : "secondary"}
+      color="default"
+      className={`px-3.5 py-2.5 border ${
         isSelected ? "bg-primary border-primary" : "bg-secondary border-border"
       }`}
     >
       <Icon name={ICON_MAP.tag} size={14} />
-      <Text
+      <Chip.Label
         className={`text-sm font-semibold ${
           isSelected ? "text-primary-foreground" : "text-foreground"
         }`}
       >
         {tag.label}
-      </Text>
-    </Pressable>
+      </Chip.Label>
+    </Chip>
   );
 };
-
-const renderBottomSheetBackdrop = (props: BottomSheetBackdropProps) => (
-  <BottomSheetBackdrop
-    {...props}
-    disappearsOnIndex={-1}
-    appearsOnIndex={0}
-    opacity={0.5}
-  />
-);
 
 const sortItems = function sortItems<T>(
   items: T[],
@@ -188,45 +187,34 @@ export const AppDrawerEditSheet = ({
   visible,
 }: AppDrawerEditSheetProps) => {
   const { width } = useWindowDimensions();
-  const bottomSheetRef = useRef<BottomSheet>(null);
-  const [alias, setAlias] = useState("");
-  const [isPinned, setIsPinned] = useState(false);
+  const fieldPlaceholder = useThemeColor("field-placeholder");
+  const sheetRef = useRef<TrueSheet>(null);
+  const aliasInputRef = useRef<TextInput>(null);
+  const [alias, setAlias] = useState(
+    () => app?.alias ?? app?.displayLabel ?? ""
+  );
+  const [isPinned, setIsPinned] = useState(() => app?.isPinned ?? false);
   const [visibility, setVisibility] = useState<
     "default" | "search-only" | "hidden"
-  >("default");
+  >(() => app?.visibility ?? "default");
   const [newTagLabel, setNewTagLabel] = useState("");
-  const [selectedTagIds, setSelectedTagIds] = useState<string[]>([]);
-
-  const snapPoints = useMemo(() => ["90%"], []);
-
-  useEffect(() => {
-    if (!app) {
-      return;
-    }
-
-    setAlias(app.alias ?? app.displayLabel);
-    setIsPinned(app.isPinned);
-    setVisibility(app.visibility ?? "default");
-    setNewTagLabel("");
-    setSelectedTagIds(app.tagIds);
-  }, [app]);
-
-  useEffect(() => {
-    if (visible && app) {
-      bottomSheetRef.current?.snapToIndex(0);
-    } else {
-      bottomSheetRef.current?.close();
-    }
-  }, [visible, app]);
-
-  const handleSheetChange = useCallback(
-    (index: number) => {
-      if (index < 0 && visible) {
-        onClose();
-      }
-    },
-    [visible, onClose]
+  const [selectedTagIds, setSelectedTagIds] = useState<string[]>(
+    () => app?.tagIds ?? []
   );
+
+  useTrueSheetVisibility(sheetRef, visible && !!app);
+
+  const handleDidDismiss = useCallback(() => {
+    if (visible) {
+      onClose();
+    }
+  }, [visible, onClose]);
+
+  const handleDidPresent = useCallback(() => {
+    if (focusMode === "rename") {
+      aliasInputRef.current?.focus();
+    }
+  }, [focusMode]);
 
   const handleToggleTag = useCallback((tagId: string) => {
     setSelectedTagIds((current) =>
@@ -263,18 +251,6 @@ export const AppDrawerEditSheet = ({
 
   const handleSetPinnedTrue = useCallback(() => {
     setIsPinned(true);
-  }, []);
-
-  const handleSetVisibilityDefault = useCallback(() => {
-    setVisibility("default");
-  }, []);
-
-  const handleSetVisibilitySearchOnly = useCallback(() => {
-    setVisibility("search-only");
-  }, []);
-
-  const handleSetVisibilityHidden = useCallback(() => {
-    setVisibility("hidden");
   }, []);
 
   const handleDeselectTag = useCallback((tagId: string) => {
@@ -400,28 +376,18 @@ export const AppDrawerEditSheet = ({
   const tagListHeight = Math.max(tags.length * TAG_ROW_HEIGHT, TAG_ROW_HEIGHT);
 
   return (
-    <BottomSheet
-      ref={bottomSheetRef}
-      index={visible ? 0 : -1}
-      snapPoints={snapPoints}
-      enablePanDownToClose
-      backdropComponent={renderBottomSheetBackdrop}
-      onChange={handleSheetChange}
-      backgroundStyle={{
-        backgroundColor: "transparent",
-        borderTopLeftRadius: 28,
-        borderTopRightRadius: 28,
-      }}
-      handleIndicatorStyle={{
-        backgroundColor: "#e5e7eb",
-        borderRadius: 999,
-        height: 5,
-        width: 44,
-      }}
-      keyboardBehavior="interactive"
-      keyboardBlurBehavior="restore"
+    <TrueSheet
+      key={app?.packageName}
+      ref={sheetRef}
+      detents={[0.9]}
+      cornerRadius={28}
+      grabber
+      dimmed
+      scrollable
+      onDidDismiss={handleDidDismiss}
+      onDidPresent={handleDidPresent}
     >
-      <BottomSheetScrollView
+      <ScrollView
         contentContainerStyle={{ gap: 16, padding: 16, paddingBottom: 32 }}
         keyboardShouldPersistTaps="handled"
       >
@@ -441,57 +407,71 @@ export const AppDrawerEditSheet = ({
           </View>
         </View>
 
-        <View className="bg-card border border-border rounded-2xl gap-3 p-4">
+        <Card className="rounded-2xl gap-3 p-4">
           <Text className="text-sm font-bold uppercase text-foreground tracking-wide">
             Label
           </Text>
           <TextInput
-            autoFocus={focusMode === "rename"}
+            ref={aliasInputRef}
             className="bg-background border border-border rounded-lg text-foreground text-base flex-1 min-h-[48px] px-3.5"
             onChangeText={setAlias}
             placeholder="Custom label"
-            placeholderTextColor="#808080"
+            placeholderTextColor={fieldPlaceholder}
             value={alias}
           />
-        </View>
+        </Card>
 
-        <View className="bg-card border border-border rounded-2xl gap-3 p-4">
+        <Card className="rounded-2xl gap-3 p-4">
           <Text className="text-sm font-bold uppercase text-foreground tracking-wide">
             Show in
           </Text>
-          <View className="flex-row bg-muted rounded-lg p-1 gap-1">
-            <View
-              className={`flex-1 rounded-md min-h-[40px] px-3 justify-center ${
-                isPinned ? "bg-transparent" : "bg-primary"
-              }`}
-              onTouchEnd={handleSetPinnedFalse}
+          <RadioGroup
+            value={isPinned ? "pinned" : "launcher"}
+            onValueChange={(value) => {
+              if (value === "pinned") {
+                handleSetPinnedTrue();
+              } else {
+                handleSetPinnedFalse();
+              }
+            }}
+            className="flex-row bg-muted rounded-lg p-1 gap-1"
+          >
+            <RadioGroup.Item
+              value="launcher"
+              className="flex-1 rounded-md min-h-[40px] px-3 justify-center"
             >
-              <Text
-                className={`text-sm font-semibold text-center ${
-                  isPinned ? "text-muted-foreground" : "text-primary-foreground"
-                }`}
-              >
-                Launcher only
-              </Text>
-            </View>
-            <View
-              className={`flex-1 rounded-md min-h-[40px] px-3 justify-center ${
-                isPinned ? "bg-primary" : "bg-transparent"
-              }`}
-              onTouchEnd={handleSetPinnedTrue}
+              {({ isSelected }) => (
+                <Label
+                  className={`text-sm font-semibold text-center ${
+                    isSelected
+                      ? "text-primary-foreground"
+                      : "text-muted-foreground"
+                  }`}
+                >
+                  Launcher only
+                </Label>
+              )}
+            </RadioGroup.Item>
+            <RadioGroup.Item
+              value="pinned"
+              className="flex-1 rounded-md min-h-[40px] px-3 justify-center"
             >
-              <Text
-                className={`text-sm font-semibold text-center ${
-                  isPinned ? "text-primary-foreground" : "text-muted-foreground"
-                }`}
-              >
-                Pinned + launcher
-              </Text>
-            </View>
-          </View>
-        </View>
+              {({ isSelected }) => (
+                <Label
+                  className={`text-sm font-semibold text-center ${
+                    isSelected
+                      ? "text-primary-foreground"
+                      : "text-muted-foreground"
+                  }`}
+                >
+                  Pinned + launcher
+                </Label>
+              )}
+            </RadioGroup.Item>
+          </RadioGroup>
+        </Card>
 
-        <View className="bg-card border border-border rounded-2xl gap-3 p-4">
+        <Card className="rounded-2xl gap-3 p-4">
           <View className="gap-1">
             <Text className="text-sm font-bold uppercase text-foreground tracking-wide">
               Visibility
@@ -500,71 +480,59 @@ export const AppDrawerEditSheet = ({
               Control where this app appears
             </Text>
           </View>
-          <View className="gap-1.5">
-            <Pressable
-              className={`flex-row items-center gap-3 rounded-xl px-3.5 min-h-[48px] border ${
-                visibility === "default"
-                  ? "bg-primary/10 border-primary"
-                  : "bg-secondary border-border"
-              }`}
-              onPress={handleSetVisibilityDefault}
+          <RadioGroup
+            value={visibility}
+            onValueChange={(value) =>
+              setVisibility(value as "default" | "search-only" | "hidden")
+            }
+            className="gap-1.5"
+          >
+            <RadioGroup.Item
+              value="default"
+              className="rounded-xl px-3.5 min-h-[48px] gap-3"
             >
-              <Text className="text-base text-foreground">
-                {visibility === "default" ? "\u25CF" : "\u25CB"}
-              </Text>
+              <Radio />
               <View className="flex-1">
-                <Text className="text-sm font-semibold text-foreground">
+                <Label className="text-sm font-semibold text-foreground">
                   Default
-                </Text>
+                </Label>
                 <Text className="text-xs text-muted-foreground">
                   Shows in drawer and search
                 </Text>
               </View>
-            </Pressable>
-            <Pressable
-              className={`flex-row items-center gap-3 rounded-xl px-3.5 min-h-[48px] border ${
-                visibility === "search-only"
-                  ? "bg-primary/10 border-primary"
-                  : "bg-secondary border-border"
-              }`}
-              onPress={handleSetVisibilitySearchOnly}
+            </RadioGroup.Item>
+            <RadioGroup.Item
+              value="search-only"
+              className="rounded-xl px-3.5 min-h-[48px] gap-3"
             >
-              <Text className="text-base text-foreground">
-                {visibility === "search-only" ? "\u25CF" : "\u25CB"}
-              </Text>
+              <Radio />
               <View className="flex-1">
-                <Text className="text-sm font-semibold text-foreground">
+                <Label className="text-sm font-semibold text-foreground">
                   Search only
-                </Text>
+                </Label>
                 <Text className="text-xs text-muted-foreground">
                   Hidden from drawer, appears in search
                 </Text>
               </View>
-            </Pressable>
-            <Pressable
-              className={`flex-row items-center gap-3 rounded-xl px-3.5 min-h-[48px] border ${
-                visibility === "hidden"
-                  ? "bg-primary/10 border-primary"
-                  : "bg-secondary border-border"
-              }`}
-              onPress={handleSetVisibilityHidden}
+            </RadioGroup.Item>
+            <RadioGroup.Item
+              value="hidden"
+              className="rounded-xl px-3.5 min-h-[48px] gap-3"
             >
-              <Text className="text-base text-foreground">
-                {visibility === "hidden" ? "\u25CF" : "\u25CB"}
-              </Text>
+              <Radio />
               <View className="flex-1">
-                <Text className="text-sm font-semibold text-foreground">
+                <Label className="text-sm font-semibold text-foreground">
                   Hidden
-                </Text>
+                </Label>
                 <Text className="text-xs text-muted-foreground">
                   Hidden from drawer and search
                 </Text>
               </View>
-            </Pressable>
-          </View>
-        </View>
+            </RadioGroup.Item>
+          </RadioGroup>
+        </Card>
 
-        <View className="bg-card border border-border rounded-2xl gap-3 p-4">
+        <Card className="rounded-2xl gap-3 p-4">
           <View className="gap-1">
             <Text className="text-sm font-bold uppercase text-foreground tracking-wide">
               Tags
@@ -580,7 +548,7 @@ export const AppDrawerEditSheet = ({
               className="bg-background border border-border rounded-lg text-foreground text-base flex-1 min-h-[48px] px-3.5"
               onChangeText={setNewTagLabel}
               placeholder="Create new tag"
-              placeholderTextColor="#808080"
+              placeholderTextColor={fieldPlaceholder}
               value={newTagLabel}
             />
             <Pressable
@@ -617,6 +585,7 @@ export const AppDrawerEditSheet = ({
                     data={tags}
                     itemHeight={TAG_ROW_HEIGHT}
                     renderItem={renderTagRow}
+                    useFlatList={false}
                   />
                 </View>
               </View>
@@ -626,9 +595,9 @@ export const AppDrawerEditSheet = ({
               Create a tag first, then assign it to this app.
             </Text>
           )}
-        </View>
+        </Card>
 
-        <View className="bg-card border border-border rounded-2xl gap-3 p-4">
+        <Card className="rounded-2xl gap-3 p-4">
           <View className="gap-1">
             <Text className="text-sm font-bold uppercase text-foreground tracking-wide">
               Pinned - manually sorted
@@ -658,8 +627,8 @@ export const AppDrawerEditSheet = ({
               No pinned apps yet. Use the menu or save this app as pinned first.
             </Text>
           )}
-        </View>
-      </BottomSheetScrollView>
+        </Card>
+      </ScrollView>
 
       <View className="flex-row gap-2 p-4 border-t border-border">
         <Pressable
@@ -677,6 +646,6 @@ export const AppDrawerEditSheet = ({
           </Text>
         </Pressable>
       </View>
-    </BottomSheet>
+    </TrueSheet>
   );
 };

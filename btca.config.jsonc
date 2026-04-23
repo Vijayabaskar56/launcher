@@ -1,0 +1,20 @@
+{
+  "$schema": "https://btca.dev/btca.schema.json",
+  "dataDirectory": ".btca",
+  "resources": [
+    {
+      "type": "git",
+      "name": "openclaw",
+      "url": "https://github.com/openclaw/openclaw",
+      "branch": "main",
+    },
+  ],
+  "model": "glm-5-turbo",
+  "provider": "openai-compat",
+  "providerOptions": {
+    "openai-compat": {
+      "baseURL": "https://api.z.ai/api/coding/paas/v4",
+      "name": "z.ai",
+    },
+  },
+}

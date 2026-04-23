@@ -1,89 +1,147 @@
-import { useMemo } from "react";
-import { Gesture } from "react-native-gesture-handler";
-import { Easing, withTiming } from "react-native-reanimated";
+import {
+  GestureStateManager,
+  usePanGesture,
+} from "react-native-gesture-handler";
+import type { NativeGesture } from "react-native-gesture-handler";
+import {
+  Easing,
+  cancelAnimation,
+  useSharedValue,
+  withTiming,
+} from "react-native-reanimated";
 import type { SharedValue } from "react-native-reanimated";
 
 import { isHorizontal } from "./use-directional-panel";
 import type { SlideFrom } from "./use-directional-panel";
 
 const TIMING_CONFIG = { duration: 300, easing: Easing.out(Easing.cubic) };
+const DISMISS_TOUCH_SLOP = 12;
 
 interface UseDirectionalDismissConfig {
   offset: SharedValue<number>;
   slideFrom: SharedValue<SlideFrom>;
-  scrollOffset: SharedValue<number>;
+  isAtTop: SharedValue<boolean>;
+  isAtBottom: SharedValue<boolean>;
   screenHeight: number;
+  scrollGesture?: NativeGesture | null;
   screenWidth: number;
 }
 
-export function useDirectionalDismiss({
+export const useDirectionalDismiss = ({
   offset,
   slideFrom,
-  scrollOffset,
+  isAtTop,
+  isAtBottom,
   screenHeight,
+  scrollGesture,
   screenWidth,
-}: UseDirectionalDismissConfig) {
-  const panGesture = useMemo(
-    () =>
-      Gesture.Pan()
-        .onUpdate((event) => {
-          "worklet";
-          const dir = slideFrom.value;
-          const horiz = isHorizontal(dir);
+}: UseDirectionalDismissConfig) => {
+  const touchStartX = useSharedValue(0);
+  const touchStartY = useSharedValue(0);
 
-          // Determine dismiss delta based on direction
-          // "bottom" dismisses on positive Y (swipe down)
-          // "top" dismisses on negative Y (swipe up)
-          // "right" dismisses on positive X (swipe right)
-          // "left" dismisses on negative X (swipe left)
-          let delta: number;
-          if (dir === "bottom") {
-            delta = event.translationY;
-          } else if (dir === "top") {
-            delta = -event.translationY;
-          } else if (dir === "right") {
-            delta = event.translationX;
-          } else {
-            delta = -event.translationX;
-          } // "left"
+  const panGesture = usePanGesture({
+    averageTouches: true,
+    block: scrollGesture ?? undefined,
+    manualActivation: true,
+    onActivate: () => {
+      cancelAnimation(offset);
+    },
+    onDeactivate: (event) => {
+      const dir = slideFrom.value;
+      const horiz = isHorizontal(dir);
+      const size = horiz ? screenWidth : screenHeight;
 
-          // For vertical panels, only dismiss when scrolled to top
-          // For horizontal panels, always allow dismiss (no horizontal scroll conflict)
-          if (!horiz && scrollOffset.value > 0) {
-            return;
-          }
-          if (delta <= 0) {
-            return;
-          }
+      let velocity: number;
+      if (dir === "bottom") {
+        velocity = event.velocityY;
+      } else if (dir === "top") {
+        velocity = -event.velocityY;
+      } else if (dir === "right") {
+        velocity = event.velocityX;
+      } else {
+        velocity = -event.velocityX;
+      }
 
-          offset.value = delta;
-        })
-        .onEnd((event) => {
-          "worklet";
-          const dir = slideFrom.value;
-          const horiz = isHorizontal(dir);
-          const size = horiz ? screenWidth : screenHeight;
+      const shouldClose = offset.value > size * 0.25 || velocity > 500;
 
-          // Get velocity in the dismiss direction
-          let velocity: number;
-          if (dir === "bottom") {
-            velocity = event.velocityY;
-          } else if (dir === "top") {
-            velocity = -event.velocityY;
-          } else if (dir === "right") {
-            velocity = event.velocityX;
-          } else {
-            velocity = -event.velocityX;
-          }
+      offset.value = withTiming(shouldClose ? size : 0, TIMING_CONFIG);
+    },
+    onTouchesDown: (event) => {
+      const [touch] = event.allTouches;
+      if (!touch) {
+        return;
+      }
+      touchStartX.value = touch.x;
+      touchStartY.value = touch.y;
+    },
+    onTouchesMove: (event) => {
+      const dir = slideFrom.value;
+      const horiz = isHorizontal(dir);
+      const [touch] = event.allTouches;
 
-          const shouldClose = offset.value > size * 0.25 || velocity > 500;
+      if (!touch) {
+        return;
+      }
 
-          offset.value = withTiming(shouldClose ? size : 0, TIMING_CONFIG);
-        })
-        .activeOffsetY([-10, 10])
-        .activeOffsetX([-10, 10]),
-    [offset, slideFrom, scrollOffset, screenHeight, screenWidth]
-  );
+      const deltaX = touch.x - touchStartX.value;
+      const deltaY = touch.y - touchStartY.value;
+      let primaryDelta = -deltaX;
+      if (dir === "bottom") {
+        primaryDelta = deltaY;
+      } else if (dir === "top") {
+        primaryDelta = -deltaY;
+      } else if (dir === "right") {
+        primaryDelta = deltaX;
+      }
+
+      const crossDelta = horiz ? Math.abs(deltaY) : Math.abs(deltaX);
+      let boundaryReady = true;
+      if (!horiz) {
+        boundaryReady = dir === "bottom" ? isAtTop.value : isAtBottom.value;
+      }
+
+      if (!boundaryReady) {
+        return;
+      }
+
+      if (
+        Math.abs(primaryDelta) < DISMISS_TOUCH_SLOP &&
+        crossDelta < DISMISS_TOUCH_SLOP
+      ) {
+        return;
+      }
+
+      if (
+        crossDelta > Math.abs(primaryDelta) &&
+        crossDelta > DISMISS_TOUCH_SLOP
+      ) {
+        return;
+      }
+
+      if (primaryDelta <= 0) {
+        return;
+      }
+
+      GestureStateManager.activate(event.handlerTag);
+    },
+    onUpdate: (event) => {
+      const dir = slideFrom.value;
+
+      let primaryChange: number;
+      if (dir === "bottom") {
+        primaryChange = event.changeY;
+      } else if (dir === "top") {
+        primaryChange = -event.changeY;
+      } else if (dir === "right") {
+        primaryChange = event.changeX;
+      } else {
+        primaryChange = -event.changeX;
+      }
+
+      offset.value = Math.max(0, offset.value + primaryChange);
+    },
+    simultaneousWith: scrollGesture ?? undefined,
+  });
 
   return panGesture;
-}
+};

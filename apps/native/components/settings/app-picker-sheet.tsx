@@ -1,14 +1,6 @@
-import { useThemeColor } from "heroui-native";
+import { Dialog, SearchField, useThemeColor } from "heroui-native";
 import { use, useCallback, useMemo, useState } from "react";
-import {
-  FlatList,
-  Image,
-  Modal,
-  Pressable,
-  Text,
-  TextInput,
-  View,
-} from "react-native";
+import { FlatList, Image, Pressable, Text, View } from "react-native";
 
 import { AppListContext } from "@/context/app-list";
 import { useThemeOverrides } from "@/context/theme-overrides";
@@ -61,24 +53,17 @@ export const AppPickerSheet = ({
   }
 
   return (
-    <Modal
-      visible
-      transparent
-      animationType="fade"
-      onRequestClose={handleClose}
-      statusBarTranslucent
+    <Dialog
+      isOpen={visible}
+      onOpenChange={(open) => {
+        if (!open) {
+          handleClose();
+        }
+      }}
     >
-      <Pressable
-        style={{
-          alignItems: "center",
-          backgroundColor: "rgba(0,0,0,0.6)",
-          flex: 1,
-          justifyContent: "center",
-          padding: 32,
-        }}
-        onPress={handleClose}
-      >
-        <Pressable
+      <Dialog.Portal>
+        <Dialog.Overlay />
+        <Dialog.Content
           style={{
             backgroundColor: surface,
             borderCurve: "continuous",
@@ -87,9 +72,8 @@ export const AppPickerSheet = ({
             overflow: "hidden",
             width: "100%",
           }}
-          onPress={() => {}}
         >
-          <Text
+          <Dialog.Title
             style={{
               color: foreground,
               fontFamily,
@@ -102,34 +86,36 @@ export const AppPickerSheet = ({
             }}
           >
             Select App
-          </Text>
+          </Dialog.Title>
 
           {/* Search input */}
-          <View
-            style={{
-              backgroundColor: `${muted}20`,
-              borderCurve: "continuous",
-              borderRadius: smallRadius,
-              marginBottom: 8,
-              marginHorizontal: 16,
-              paddingHorizontal: 14,
-              paddingVertical: 10,
-            }}
+          <SearchField
+            value={searchQuery}
+            onChange={setSearchQuery}
+            style={{ marginBottom: 8, marginHorizontal: 16 }}
           >
-            <TextInput
-              placeholder="Search apps..."
-              placeholderTextColor={muted}
-              value={searchQuery}
-              onChangeText={setSearchQuery}
+            <SearchField.Group
               style={{
-                color: foreground,
-                fontFamily,
-                fontSize: 15,
+                backgroundColor: `${muted}20`,
+                borderCurve: "continuous",
+                borderRadius: smallRadius,
               }}
-              autoCapitalize="none"
-              autoCorrect={false}
-            />
-          </View>
+            >
+              <SearchField.SearchIcon />
+              <SearchField.Input
+                placeholder="Search apps..."
+                placeholderTextColor={muted}
+                style={{
+                  color: foreground,
+                  fontFamily,
+                  fontSize: 15,
+                }}
+                autoCapitalize="none"
+                autoCorrect={false}
+              />
+              <SearchField.ClearButton />
+            </SearchField.Group>
+          </SearchField>
 
           <FlatList
             data={filteredApps}
@@ -198,8 +184,8 @@ export const AppPickerSheet = ({
               </Pressable>
             )}
           />
-        </Pressable>
-      </Pressable>
-    </Modal>
+        </Dialog.Content>
+      </Dialog.Portal>
+    </Dialog>
   );
 };

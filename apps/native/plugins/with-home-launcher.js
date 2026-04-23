@@ -36,11 +36,18 @@ const createHomeIntentFilter = () => ({
 });
 
 /**
- * Inject the HOME re-launch guard into MainActivity.kt.
- * When the app is already running and the user presses HOME,
- * Android re-creates the activity. expo-dev-client crashes because
- * the React context already exists. This guard finishes the duplicate
- * activity before onCreate proceeds.
+ * Inject the HOME re-launch guard + key-event NPE guard into MainActivity.kt.
+ *
+ * HOME guard: when the app is already running and the user presses HOME,
+ * Android re-creates the activity. expo-dev-client crashes because the React
+ * context already exists; we finish the duplicate activity before onCreate
+ * proceeds.
+ *
+ * Key-event guard: ReactActivityDelegate.onKeyDown/onKeyUp call
+ * Objects.requireNonNull(getReactHost()), which NPEs when a key event is
+ * delivered before the React host is ready (common during dev-launcher → app
+ * handoff, since launcher apps intercept HOME). Swallow the NPE so the app
+ * doesn't crash on launch.
  */
 const patchMainActivity = (projectRoot) => {
   const mainActivityPath = path.join(
@@ -54,21 +61,16 @@ const patchMainActivity = (projectRoot) => {
 
   let content = fs.readFileSync(mainActivityPath, "utf8");
 
-  // Already patched
-  if (content.includes("CATEGORY_HOME")) {
-    return;
-  }
+  // --- HOME re-launch guard ---
+  if (!content.includes("CATEGORY_HOME")) {
+    if (!content.includes("import android.content.Intent")) {
+      content = content.replace(
+        "import android.os.Build",
+        "import android.content.Intent\nimport android.os.Build"
+      );
+    }
 
-  // Add the import
-  if (!content.includes("import android.content.Intent")) {
-    content = content.replace(
-      "import android.os.Build",
-      "import android.content.Intent\nimport android.os.Build"
-    );
-  }
-
-  // Add the guard at the top of onCreate, before SplashScreenManager
-  const guard = `    // Guard against HOME intent re-launch crash with expo-dev-client
+    const guard = `    // Guard against HOME intent re-launch crash with expo-dev-client
     if (!isTaskRoot &&
         intent.hasCategory(Intent.CATEGORY_HOME) &&
         intent.action == Intent.ACTION_MAIN) {
@@ -77,10 +79,56 @@ const patchMainActivity = (projectRoot) => {
     }
 `;
 
-  content = content.replace(
-    "  override fun onCreate(savedInstanceState: Bundle?) {\n",
-    `  override fun onCreate(savedInstanceState: Bundle?) {\n${guard}\n`
-  );
+    content = content.replace(
+      "  override fun onCreate(savedInstanceState: Bundle?) {\n",
+      `  override fun onCreate(savedInstanceState: Bundle?) {\n${guard}\n`
+    );
+  }
+
+  // --- Key-event NPE guard ---
+  if (!content.includes("onKeyDown")) {
+    if (!content.includes("import android.view.KeyEvent")) {
+      content = content.replace(
+        "import android.os.Bundle",
+        "import android.os.Bundle\nimport android.util.Log\nimport android.view.KeyEvent"
+      );
+    }
+
+    const keyGuard = `
+  // Guard ReactActivityDelegate.onKeyDown/onKeyUp against NPE when a key event
+  // is delivered before the React host is ready (common during dev-launcher →
+  // app handoff on launcher apps that intercept HOME).
+  override fun onKeyDown(keyCode: Int, event: KeyEvent?): Boolean {
+    return try {
+      super.onKeyDown(keyCode, event)
+    } catch (e: NullPointerException) {
+      Log.w("MainActivity", "Swallowed NPE in onKeyDown before React host ready", e)
+      false
+    }
+  }
+
+  override fun onKeyUp(keyCode: Int, event: KeyEvent?): Boolean {
+    return try {
+      super.onKeyUp(keyCode, event)
+    } catch (e: NullPointerException) {
+      Log.w("MainActivity", "Swallowed NPE in onKeyUp before React host ready", e)
+      false
+    }
+  }
+
+  override fun onKeyLongPress(keyCode: Int, event: KeyEvent?): Boolean {
+    return try {
+      super.onKeyLongPress(keyCode, event)
+    } catch (e: NullPointerException) {
+      Log.w("MainActivity", "Swallowed NPE in onKeyLongPress before React host ready", e)
+      false
+    }
+  }
+`;
+
+    // Insert before the final closing brace of the class
+    content = content.replace(/\n\}\s*$/, `${keyGuard}}\n`);
+  }
 
   fs.writeFileSync(mainActivityPath, content, "utf8");
 };

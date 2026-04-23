@@ -1,8 +1,11 @@
 package com.margelo.nitro.launcherservice
 
 import android.content.Context
+import android.os.Build
+import android.view.WindowManager
 import androidx.annotation.Keep
 import com.facebook.proguard.annotations.DoNotStrip
+import com.facebook.react.bridge.ReactApplicationContext
 import com.margelo.nitro.NitroModules
 
 @Keep
@@ -72,4 +75,32 @@ class HybridLauncherService : HybridLauncherServiceSpec() {
 
     override val hasShortcutHostPermission: Boolean
         get() = shortcutProvider.hasShortcutHostPermission
+
+    // --- Wallpaper blur ---
+
+    override fun setWallpaperBlurRadius(radius: Double) {
+        if (Build.VERSION.SDK_INT < 31) return
+
+        val reactContext = NitroModules.applicationContext as? ReactApplicationContext ?: return
+        val activity = reactContext.currentActivity ?: return
+
+        activity.runOnUiThread {
+            val window = activity.window ?: return@runOnUiThread
+            val radiusPx = (radius * activity.resources.displayMetrics.density).toInt()
+
+            if (radiusPx > 0) {
+                window.addFlags(WindowManager.LayoutParams.FLAG_BLUR_BEHIND)
+                window.attributes = window.attributes.also {
+                    it.blurBehindRadius = radiusPx
+                }
+                window.setBackgroundBlurRadius(radiusPx)
+            } else {
+                window.clearFlags(WindowManager.LayoutParams.FLAG_BLUR_BEHIND)
+                window.setBackgroundBlurRadius(0)
+            }
+        }
+    }
+
+    override val isWallpaperBlurSupported: Boolean
+        get() = Build.VERSION.SDK_INT >= 31
 }

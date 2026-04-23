@@ -2,15 +2,15 @@
 
 module.exports = {
   dependency: {
-    platforms: {
-      /**
-       * @type {import('@react-native-community/cli-types').IOSDependencyParams}
-       */
-      ios: {},
+    android: {
       /**
        * @type {import('@react-native-community/cli-types').AndroidDependencyParams}
        */
-      android: {},
+    },
+    ios: {
+      /**
+       * @type {import('@react-native-community/cli-types').IOSDependencyParams}
+       */
     },
   },
 };

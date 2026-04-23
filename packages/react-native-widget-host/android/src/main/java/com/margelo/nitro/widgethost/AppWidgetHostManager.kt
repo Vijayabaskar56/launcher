@@ -34,6 +34,69 @@ class AppWidgetHostManager private constructor(context: Context) {
     private var pendingBindWidgetId: Int = -1
     private var pendingConfigurePromise: Promise<Double>? = null
     private var pendingConfigureWidgetId: Int = -1
+    private var currentReactContext: ReactApplicationContext? = null
+    private var hasActivityEventListener = false
+
+    private val activityEventListener = object : ActivityEventListener {
+        override fun onActivityResult(
+            activity: Activity,
+            requestCode: Int,
+            resultCode: Int,
+            data: Intent?
+        ) {
+            when (requestCode) {
+                REQUEST_BIND -> {
+                    val boundWidgetId = pendingBindWidgetId
+                    val pendingPromise = pendingBindPromise
+                    clearPendingBindState()
+
+                    if (boundWidgetId < 0 || pendingPromise == null) {
+                        return
+                    }
+
+                    if (resultCode == Activity.RESULT_OK) {
+                        try {
+                            val reactContext = currentReactContext
+                                ?: throw Error("No React context available")
+
+                            continueConfigureFlow(
+                                widgetId = boundWidgetId,
+                                promise = pendingPromise,
+                                reactContext = reactContext
+                            )
+                        } catch (error: Exception) {
+                            deleteWidget(boundWidgetId)
+                            pendingPromise.reject(error)
+                            clearPendingConfigureState()
+                        }
+                        return
+                    }
+
+                    deleteWidget(boundWidgetId)
+                    pendingPromise.reject(Error("Widget bind cancelled"))
+                }
+
+                REQUEST_CONFIGURE -> {
+                    val configuredWidgetId = pendingConfigureWidgetId
+                    val pendingPromise = pendingConfigurePromise
+                    clearPendingConfigureState()
+
+                    if (configuredWidgetId < 0 || pendingPromise == null) {
+                        return
+                    }
+
+                    if (resultCode == Activity.RESULT_OK) {
+                        pendingPromise.resolve(configuredWidgetId.toDouble())
+                    } else {
+                        deleteWidget(configuredWidgetId)
+                        pendingPromise.reject(Error("Widget configuration cancelled"))
+                    }
+                }
+            }
+        }
+
+        override fun onNewIntent(intent: Intent) {}
+    }
 
     init {
         // Auto-manage lifecycle
@@ -90,6 +153,7 @@ class AppWidgetHostManager private constructor(context: Context) {
         }
 
         startListeningSafely()
+        ensureActivityEventListener(reactContext)
 
         val widgetId = widgetHost.allocateAppWidgetId()
         val componentName = ComponentName.unflattenFromString(provider)
@@ -118,71 +182,11 @@ class AppWidgetHostManager private constructor(context: Context) {
 
         val activity = reactContext.currentActivity
         if (activity == null) {
+            clearPendingBindState()
             deleteWidget(widgetId)
             promise.reject(Error("No activity available"))
             return promise
         }
-
-        reactContext.addActivityEventListener(object : ActivityEventListener {
-            override fun onActivityResult(
-                activity: Activity,
-                requestCode: Int,
-                resultCode: Int,
-                data: Intent?
-            ) {
-                when (requestCode) {
-                    REQUEST_BIND -> {
-                        val boundWidgetId = pendingBindWidgetId
-                        val pendingPromise = pendingBindPromise
-                        pendingBindPromise = null
-                        pendingBindWidgetId = -1
-
-                        if (boundWidgetId < 0 || pendingPromise == null) {
-                            reactContext.removeActivityEventListener(this)
-                            return
-                        }
-
-                        if (resultCode == Activity.RESULT_OK) {
-                            try {
-                                continueConfigureFlow(boundWidgetId, pendingPromise, reactContext)
-                            } catch (error: Exception) {
-                                deleteWidget(boundWidgetId)
-                                pendingPromise.reject(error)
-                                clearPendingConfigureState()
-                                reactContext.removeActivityEventListener(this)
-                            }
-                            return
-                        }
-
-                        deleteWidget(boundWidgetId)
-                        pendingPromise.reject(Error("Widget bind cancelled"))
-                        reactContext.removeActivityEventListener(this)
-                    }
-
-                    REQUEST_CONFIGURE -> {
-                        val configuredWidgetId = pendingConfigureWidgetId
-                        val pendingPromise = pendingConfigurePromise
-                        clearPendingConfigureState()
-
-                        if (configuredWidgetId < 0 || pendingPromise == null) {
-                            reactContext.removeActivityEventListener(this)
-                            return
-                        }
-
-                        if (resultCode == Activity.RESULT_OK) {
-                            pendingPromise.resolve(configuredWidgetId.toDouble())
-                        } else {
-                            deleteWidget(configuredWidgetId)
-                            pendingPromise.reject(Error("Widget configuration cancelled"))
-                        }
-
-                        reactContext.removeActivityEventListener(this)
-                    }
-                }
-            }
-
-            override fun onNewIntent(intent: Intent) {}
-        })
 
         val intent = Intent(AppWidgetManager.ACTION_APPWIDGET_BIND).apply {
             putExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, widgetId)
@@ -248,6 +252,22 @@ class AppWidgetHostManager private constructor(context: Context) {
     private fun clearPendingConfigureState() {
         pendingConfigurePromise = null
         pendingConfigureWidgetId = -1
+    }
+
+    private fun clearPendingBindState() {
+        pendingBindPromise = null
+        pendingBindWidgetId = -1
+    }
+
+    private fun ensureActivityEventListener(reactContext: ReactApplicationContext) {
+        currentReactContext = reactContext
+
+        if (hasActivityEventListener) {
+            return
+        }
+
+        reactContext.addActivityEventListener(activityEventListener)
+        hasActivityEventListener = true
     }
 
     private fun startListeningSafely() {

@@ -1,30 +1,11 @@
 import { Ionicons } from "@expo/vector-icons";
-import { useThemeColor } from "heroui-native";
+import { Chip, useThemeColor } from "heroui-native";
 import { memo } from "react";
-import { Pressable, ScrollView, Text, View } from "react-native";
-import type { ViewStyle } from "react-native";
+import { ScrollView, View } from "react-native";
 
 import type { SearchActionMatch } from "@/types/search";
 
 type IoniconName = keyof typeof Ionicons.glyphMap;
-
-const pillPressedStyle: ViewStyle = {
-  alignItems: "center",
-  backgroundColor: "rgba(255,255,255,0.08)",
-  borderRadius: 20,
-  flexDirection: "row",
-  gap: 6,
-  paddingHorizontal: 14,
-  paddingVertical: 8,
-};
-
-const pillDefaultStyle: ViewStyle = {
-  ...pillPressedStyle,
-  backgroundColor: "rgba(255,255,255,0.04)",
-};
-
-const getPillStyle = ({ pressed }: { pressed: boolean }) =>
-  pressed ? pillPressedStyle : pillDefaultStyle;
 
 const ActionPill = ({ action }: { action: SearchActionMatch }) => {
   const accent = useThemeColor("accent");
@@ -32,15 +13,20 @@ const ActionPill = ({ action }: { action: SearchActionMatch }) => {
   const handlePress = action.onPress;
 
   return (
-    <Pressable onPress={handlePress} style={getPillStyle}>
+    <Chip
+      onPress={handlePress}
+      variant="secondary"
+      color="default"
+      className="bg-white/[0.04] px-3.5 py-2"
+    >
       <Ionicons name={action.icon as IoniconName} size={16} color={accent} />
-      <Text
+      <Chip.Label
         numberOfLines={1}
         style={{ color: foreground, fontSize: 13, fontWeight: "500" }}
       >
         {action.label}
-      </Text>
-    </Pressable>
+      </Chip.Label>
+    </Chip>
   );
 };
 

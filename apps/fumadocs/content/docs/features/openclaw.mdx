@@ -1,0 +1,136 @@
+---
+title: OpenClaw Chat
+description: Built-in agentic chat that connects the launcher to a remote OpenClaw gateway server.
+---
+
+OpenClaw is a remote agent/chat gateway. The launcher ships a first-party client that
+connects to an OpenClaw server, discovers its agents, and exposes chat as **topics**
+surfaced from the launcher search bar. Pressing Enter in the search bar falls through
+to the active topic's full-screen chat when no local result wins.
+
+This page covers the user-facing feature surface. For the wire contract see
+[OpenClaw Protocol](/docs/features/openclaw/protocol). For the native transport see
+[react-native-openclaw-gateway](/docs/native-modules/openclaw-gateway).
+
+## What OpenClaw is
+
+OpenClaw is an external gateway server that exposes agents and chat sessions via a
+WebSocket RPC protocol. The launcher is an **operator** client: it does not host the
+agent runtime, it simply connects, enumerates agents, and pipes chat through
+`chat.send` / `chat.history` RPCs on a persistent operator connection.
+
+Chat is the only OpenClaw surface exposed in the launcher today. The launcher does
+not mirror the full OpenClaw Android runtime.
+
+## User-facing flow
+
+### Connecting
+
+Connection is manual in v1. From **Settings -> OpenClaw**, the user can either:
+
+1. **Paste a setup code.** A base64url-encoded JSON blob carrying `url` plus any of
+   `bootstrapToken`, `token`, or `password`.
+2. **Enter a manual endpoint.** Host + port + TLS toggle, with tokens/password fields
+   if the server requires them.
+
+### TLS trust prompt
+
+The first secure connect to a new endpoint never connects directly. The native module
+probes the remote certificate fingerprint, surfaces it to JS, and the user must
+explicitly accept it. Trusted fingerprints are persisted by stable endpoint identity
+and pinned on subsequent connects.
+
+<Callout type="warn">
+  Cleartext `ws://` / `http://` is only permitted for localhost, the Android
+  emulator alias `10.0.2.2`, private LAN hosts, and `.local` hosts. Any remote
+  non-LAN endpoint **must** use TLS — the native client refuses cleartext
+  otherwise.
+</Callout>
+
+### Topic list
+
+Topic pills live in the search bar rail:
+
+- `Chat` is a stable built-in topic, always first, never deletable, selected by
+  default on first boot.
+- Additional user-created topics can be added from the edit sheet next to the rail.
+- Exactly one topic is always active. Changing the active topic only changes where
+  an Enter fallback routes — it does not affect typed local search results.
+- Topics may optionally bind to an OpenClaw agent. Offline topic creation is allowed
+  only for topics without an agent binding.
+
+Local topics are the **source of truth** for topic labels. Remote rename and remote
+delete are **disabled in v1** (see [Protocol — not in v1 scope](/docs/features/openclaw/protocol#not-in-v1-scope)).
+
+### Chat screen
+
+Opening a topic routes to a full-screen, topic-locked chat at
+`/openclaw/chat/[topicId]`. The screen:
+
+- Resolves the topic's `sessionKey` via the provider.
+- Loads history with `chat.history` (limit 100).
+- Sends with `chat.send`, carrying an `idempotencyKey` per attempt.
+- Does not allow topic switching from inside the chat UI.
+- Shows an empty first-message state when the topic has no prior messages.
+- If disconnected, renders an "OpenClaw connection required" screen with a button
+  back to the connection settings.
+
+### Search-bar Enter routing
+
+Enter precedence in the drawer:
+
+1. First actionable local result.
+2. First quick action.
+3. Active topic chat fallback.
+
+If the active-topic fallback is needed but the gateway is disconnected, the launcher
+records a **pending resume intent** (topic id + message text), navigates to the
+OpenClaw connection settings, and after a successful connect it routes directly into
+the intended topic chat and auto-sends the preserved message. On connect failure,
+the pending message is preserved for retry.
+
+### Abort
+
+`chat.abort` is wired through the native module and is available for future chat
+controls. The first slice does not expose a UI affordance for it.
+
+## Agent binding
+
+There is **no dedicated agent-init RPC**. The gateway treats agent selection as part
+of the session-key namespace:
+
+```
+agent:<agentId>:<rest>
+agent:<agentId>:main
+```
+
+When a topic has an `agentId`, the launcher binds it on first send by choosing an
+agent-scoped `sessionKey` (e.g. `agent:<agentId>:topic-<id>`). Plain non-agent topics
+use a plain launcher-generated session key. Bindings are immutable in v1 — the
+editor UI does not allow agent reassignment after the first send.
+
+## Local vs remote topic semantics
+
+| Concern      | v1 behavior                                                       |
+| ------------ | ----------------------------------------------------------------- |
+| Topic labels | Local only. Source of truth is the launcher.                      |
+| Create topic | Local. Agent-bound creation requires connection.                  |
+| Delete topic | Local delete always succeeds immediately. Remote delete disabled. |
+| Rename topic | Local only. Remote rename disabled.                               |
+| History      | Remote, via `chat.history` per `sessionKey`.                      |
+| Send         | Remote, via `chat.send` with an `idempotencyKey`.                 |
+
+`sessions.patch` and `sessions.delete` both exist on the gateway but require
+`operator.admin`, which the launcher does not request. If scopes are later widened,
+remote rename/delete can be added behind that explicit decision.
+
+## Relevant files
+
+- `apps/native/app/openclaw/_layout.tsx`
+- `apps/native/app/openclaw/chat/[topicId].tsx`
+- `apps/native/components/openclaw/chat-screen.tsx`
+- `apps/native/components/openclaw/chat-message-list.tsx`
+- `apps/native/components/openclaw/chat-composer.tsx`
+- `apps/native/components/openclaw/topic-editor-sheet.tsx`
+- `apps/native/context/openclaw.tsx`
+- `apps/native/lib/openclaw/chat.ts`

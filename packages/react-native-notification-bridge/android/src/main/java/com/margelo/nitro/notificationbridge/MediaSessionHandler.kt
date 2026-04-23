@@ -13,6 +13,7 @@ import java.io.File
 import java.io.FileOutputStream
 import java.net.URL
 import java.util.concurrent.Executors
+import java.util.concurrent.atomic.AtomicLong
 
 /**
  * Manages the active MediaController and pushes metadata/playback state
@@ -29,6 +30,10 @@ class MediaSessionHandler(private val context: Context) {
     private var registeredCallback: MediaController.Callback? = null
     private val mainHandler = Handler(Looper.getMainLooper())
     private val ioExecutor = Executors.newSingleThreadExecutor()
+    private val artRequestCounter = AtomicLong(0)
+
+    @Volatile
+    private var activeArtRequestId = 0L
 
     // JS callbacks (last-writer-wins)
     var onMetadataChanged: ((MediaMetadata?) -> Unit)? = null
@@ -49,6 +54,7 @@ class MediaSessionHandler(private val context: Context) {
 
         if (token == null) {
             controller = null
+            activeArtRequestId = 0L
             onMetadataChanged?.invoke(null)
             onPlaybackStateChanged?.invoke(PlaybackState.NONE)
             return
@@ -68,6 +74,7 @@ class MediaSessionHandler(private val context: Context) {
             }
 
             override fun onSessionDestroyed() {
+                activeArtRequestId = 0L
                 onMetadataChanged?.invoke(null)
                 onPlaybackStateChanged?.invoke(PlaybackState.NONE)
             }
@@ -90,6 +97,10 @@ class MediaSessionHandler(private val context: Context) {
         controller?.transportControls?.pause()
     }
 
+    fun seekTo(positionMs: Long) {
+        controller?.transportControls?.seekTo(positionMs)
+    }
+
     fun skipToNext() {
         controller?.transportControls?.skipToNext()
     }
@@ -98,11 +109,57 @@ class MediaSessionHandler(private val context: Context) {
         controller?.transportControls?.skipToPrevious()
     }
 
+    /** Push current metadata/playback state to JS (called when JS subscribes late) */
+    fun pushCurrentState() {
+        val ctrl = controller ?: return
+        handleMetadataChanged(ctrl.metadata, ctrl.packageName)
+    }
+
+    fun pushCurrentPlaybackState() {
+        val ctrl = controller ?: return
+        handlePlaybackStateChanged(ctrl.playbackState)
+    }
+
+    fun canSeek(): Boolean {
+        val ctrl = controller ?: return false
+        val state = ctrl.playbackState ?: return false
+        return (state.actions and AndroidPlaybackState.ACTION_SEEK_TO) != 0L
+    }
+
+    fun getPlaybackPosition(): Double {
+        val ctrl = controller ?: return 0.0
+        val state = ctrl.playbackState ?: return 0.0
+        val basePosition = state.position.takeIf { it >= 0 } ?: return 0.0
+
+        return when (state.state) {
+            AndroidPlaybackState.STATE_PLAYING,
+            AndroidPlaybackState.STATE_FAST_FORWARDING,
+            AndroidPlaybackState.STATE_REWINDING -> {
+                val updatedAt = state.lastPositionUpdateTime
+                if (updatedAt <= 0) {
+                    basePosition.toDouble()
+                } else {
+                    val elapsedMs = System.currentTimeMillis() - updatedAt
+                    val adjusted =
+                        basePosition.toDouble() +
+                            (elapsedMs * state.playbackSpeed.toDouble())
+                    adjusted.coerceAtLeast(0.0)
+                }
+            }
+
+            else -> basePosition.toDouble()
+        }
+    }
+
     private fun handleMetadataChanged(metadata: AndroidMediaMetadata?, packageName: String) {
         if (metadata == null) {
+            activeArtRequestId = 0L
             onMetadataChanged?.invoke(null)
             return
         }
+
+        val artRequestId = artRequestCounter.incrementAndGet()
+        activeArtRequestId = artRequestId
 
         val title = metadata.getString(AndroidMediaMetadata.METADATA_KEY_TITLE)
             ?: metadata.getString(AndroidMediaMetadata.METADATA_KEY_DISPLAY_TITLE)
@@ -120,7 +177,7 @@ class MediaSessionHandler(private val context: Context) {
             ?: metadata.getBitmap(AndroidMediaMetadata.METADATA_KEY_ART)
 
         if (inlineBitmap != null) {
-            val albumArtPath = saveBitmapToCache(inlineBitmap)
+            val albumArtPath = saveBitmapToCache(inlineBitmap, artRequestId)
             emitMetadata(title, artist, album, albumArtPath, duration, packageName)
             return
         }
@@ -133,10 +190,12 @@ class MediaSessionHandler(private val context: Context) {
             // Emit immediately without art, then update when art is ready
             emitMetadata(title, artist, album, null, duration, packageName)
             ioExecutor.execute {
-                val albumArtPath = loadAndCacheFromUri(uriString)
+                val albumArtPath = loadAndCacheFromUri(uriString, artRequestId)
                 if (albumArtPath != null) {
                     mainHandler.post {
-                        emitMetadata(title, artist, album, albumArtPath, duration, packageName)
+                        if (activeArtRequestId == artRequestId) {
+                            emitMetadata(title, artist, album, albumArtPath, duration, packageName)
+                        }
                     }
                 }
             }
@@ -181,10 +240,10 @@ class MediaSessionHandler(private val context: Context) {
     }
 
     /** Write to a temp file then atomically rename to avoid half-read races */
-    private fun writeToCache(writer: (FileOutputStream) -> Unit): String? {
+    private fun writeToCache(requestId: Long, writer: (FileOutputStream) -> Unit): String? {
         return try {
-            val tmp = File(artDir, "current.tmp")
-            val target = File(artDir, "current.png")
+            val tmp = File(artDir, "art-$requestId.tmp")
+            val target = File(artDir, "art-$requestId.png")
             FileOutputStream(tmp).use { writer(it) }
             tmp.renameTo(target)
             target.absolutePath
@@ -193,11 +252,13 @@ class MediaSessionHandler(private val context: Context) {
         }
     }
 
-    private fun saveBitmapToCache(bitmap: Bitmap): String? {
-        return writeToCache { out -> bitmap.compress(Bitmap.CompressFormat.PNG, 90, out) }
+    private fun saveBitmapToCache(bitmap: Bitmap, requestId: Long): String? {
+        return writeToCache(requestId) { out ->
+            bitmap.compress(Bitmap.CompressFormat.PNG, 90, out)
+        }
     }
 
-    private fun loadAndCacheFromUri(uriString: String): String? {
+    private fun loadAndCacheFromUri(uriString: String, requestId: Long): String? {
         return try {
             val uri = Uri.parse(uriString)
             val input = when (uri.scheme) {
@@ -206,7 +267,7 @@ class MediaSessionHandler(private val context: Context) {
                 else -> null
             } ?: return null
 
-            writeToCache { out -> input.use { it.copyTo(out) } }
+            writeToCache(requestId) { out -> input.use { it.copyTo(out) } }
         } catch (_: Exception) {
             null
         }

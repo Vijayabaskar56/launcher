@@ -1,0 +1,231 @@
+---
+title: Universal Search
+description: Kvaesitso-style search bar that queries apps, contacts, calendar, calculator, unit/currency conversion, Wikipedia, and the web from a single input — with inline @, #, :, and / triggers.
+icon: Search
+---
+
+The search bar is the launcher's fastest path to any action: installed apps,
+contacts, calendar events, calculator results, emoji, settings, and the open
+web, all behind one text field. Inspired directly by
+[Kvaesitso](https://kvaesitso.mm20.de)'s search, it is implemented with
+`react-native-enriched` for rich inline triggers (`@person`, `#filter`,
+`:emoji:`, `/command`).
+
+Source:
+[`components/search-bar.tsx`](https://github.com/Vijayabaskar56/launcher/blob/main/apps/native/components/search-bar.tsx),
+[`components/search/`](https://github.com/Vijayabaskar56/launcher/tree/main/apps/native/components/search),
+and the hook cluster under
+[`apps/native/hooks/use-search.ts`](https://github.com/Vijayabaskar56/launcher/blob/main/apps/native/hooks/use-search.ts).
+Original design:
+[search implementation plan](https://github.com/Vijayabaskar56/launcher/blob/main/apps/native/docs/plans/2026-03-26-search-implementation.md)
+and
+[enriched search bar plan](https://github.com/Vijayabaskar56/launcher/blob/main/apps/native/docs/plans/2026-03-27-enriched-search-bar-implementation.md).
+
+## Architecture
+
+Two cooperating hook systems power the bar:
+
+```
+EnrichedTextInput  ── user types ──┐
+       │                           │
+       │ onStartMention/@#:/       │ onChangeText
+       ▼                           ▼
+ useEnrichedSearch           useSearchBar (context)
+ (trigger + suggestions)     (text state, filters)
+       │                           │
+       │                           ▼
+       ▼                     useSearch(query)
+ SuggestionPopup                   │
+ (people/filter/emoji/cmd)   ┌─────┴─────┐
+                             ▼           ▼
+                     SearchProviders   SearchActions
+                     (apps, calc, …)   (pattern matches)
+                             │           │
+                             └─────┬─────┘
+                                   ▼
+                           SearchResultsList
+                         (sections + filter bar)
+```
+
+- **`useEnrichedSearch`** handles what the user is currently typing _inside_ a
+  trigger like `@` or `#` and returns context-specific suggestions.
+- **`useSearch`** runs the actual query against every enabled provider and
+  returns a `Map<SearchResultType, SearchResult[]>` plus a list of action
+  matches (open URL, search the web, etc.).
+
+They run in parallel. The enriched suggestions appear in a popup above the
+input while the main results stream into the drawer below.
+
+## Search providers
+
+`useSearch` composes an array of `SearchProvider`s based on the user's
+settings. Each provider is an independent module in
+`apps/native/lib/search-providers/`:
+
+```ts
+if (settings.search.searchAllApps) providers.push(appProvider);
+if (settings.search.calculator) providers.push(calculatorProvider);
+if (settings.search.unitConverter) providers.push(unitConverterProvider);
+if (settings.search.currencyConverter) providers.push(currencyProvider);
+if (settings.search.contactSearch) providers.push(contactProvider);
+if (settings.search.calendarSearch) providers.push(calendarProvider);
+if (settings.search.wikipediaSearch) providers.push(wikipediaProvider);
+if (settings.search.websiteSearch) providers.push(websiteProvider);
+if (settings.search.locationSearch) providers.push(locationProvider);
+```
+
+Each provider receives a shared `ProviderDeps` bundle containing the full app
+list, alias map, visibility map, usage counts (for ranking), the max usage
+count, and the user's search settings. Providers return results tagged with a
+`SearchResultType` such as `app`, `contact`, `event`, `calculator`, `wikipedia`,
+`website`, or `location`.
+
+Network-backed providers (Wikipedia, website/URL, location) only run when the
+user has explicitly enabled "allow network" — a toggle stored under
+`search-allow-network` in MMKV and flipped from the filter bar.
+
+### Ranking
+
+Results are collected by `createSearchSession` from
+`lib/search-service.ts` and ordered inside each section. The `app` provider
+blends exact label match, alias match, prefix match, and **usage count**
+(tracked by `lib/usage-tracker.ts`) so heavily used apps float up. The
+`maxUsage` is passed so providers can normalize their score bumps relative to
+the most-launched app. `sortedSections` then produces a stable section order
+for the final list.
+
+### Search actions
+
+Separate from providers, `getSearchActions(query, engine)` runs pattern
+matching on the raw query to produce one-tap actions: "Search Google for
+`query`", "Open URL", "Call this number", etc. These render as a horizontally
+scrollable chip row at the very top of the results via
+`SearchActionRow`.
+
+## The filter bar
+
+`SearchFilterBar` docks above the keyboard (or above the search bar when the
+keyboard is closed) and shows chips for five categories:
+
+```ts
+const FILTER_CONFIG = [
+  { key: "apps", label: "Apps", icon: "grid-outline" },
+  { key: "contacts", label: "Contacts", icon: "person-outline" },
+  { key: "events", label: "Calendar", icon: "calendar-outline" },
+  { key: "tools", label: "Tools", icon: "calculator-outline" },
+  { key: "web", label: "Web", icon: "globe-outline" },
+];
+```
+
+Toggling a filter sets an entry in `activeFilters: Set<SearchFilter>` that
+`useSearch` passes into the session. `getAvailableFilters(results)` dims chips
+for categories the current result set has nothing to offer.
+
+`SearchResultsList` also collapses each section to `MAX_COLLAPSED = 3`
+results _unless_ exactly one filter is active, in which case the full list is
+shown — the Kvaesitso "preview, then expand" pattern.
+
+## Enriched triggers
+
+`react-native-enriched`'s `EnrichedTextInput` emits `onStartMention`,
+`onChangeMention`, and `onEndMention` events whenever the user types one of
+the registered indicators:
+
+```tsx
+<EnrichedTextInput
+  mentionIndicators={["@", "#", ":", "/"]}
+  onStartMention={enriched.onStartMention}
+  onChangeMention={enriched.onChangeMention}
+  onEndMention={enriched.onEndMention}
+  ...
+/>
+```
+
+`useEnrichedSearch` routes the active trigger to the right suggestion hook:
+
+| Trigger | Hook                    | Produces                                          |
+| ------- | ----------------------- | ------------------------------------------------- |
+| `@`     | `usePeopleSuggestions`  | Contacts from `expo-contacts` (mocks as fallback) |
+| `#`     | `useFilterSuggestions`  | Static list of the five filter categories         |
+| `:`     | `useEmojiSuggestions`   | Static emoji shortcode table                      |
+| `/`     | `useCommandSuggestions` | Launcher commands (e.g. `/settings`, `/theme`)    |
+
+Each hook takes the trigger's partial query and returns at most five matches
+using a simple `startsWith` prefix filter. They are all cheap, synchronous
+computations — except `usePeopleSuggestions`, which asynchronously loads
+contacts once after verifying permission and falls back to an in-memory mock
+list so the UI is never empty during testing or when the user denies contact
+access.
+
+### Selection behaviour
+
+`onSelectSuggestion` in `use-enriched-search.ts` decides what happens when the
+user taps a suggestion:
+
+```ts
+case "person": {
+  callbacks.setMention("@", `@${person.name}`, {
+    id: person.id, type: "person",
+  });
+  callbacks.toggleFilter("contacts");
+  break;
+}
+case "filter": {
+  callbacks.setMention("#", `#${filter.label}`, {
+    filterKey: filter.filterKey,
+  });
+  callbacks.toggleFilter(filter.filterKey);
+  break;
+}
+case "emoji":   callbacks.insertText(emoji.emoji); break;
+case "command": command.action(); callbacks.setValue(""); break;
+```
+
+A key detail: selecting a person or a filter not only inserts the enriched
+span, it also calls `toggleFilter` to flip the matching chip on the filter
+bar. The `filterToggleRef` is registered by the drawer so the search bar can
+poke the drawer's local `useSearch` state without owning it. Commands run an
+`action` (usually `router.push(...)`) and then clear the input.
+
+## Keyboard & positioning
+
+`SearchBarFrame` listens to `keyboardDidShow`/`keyboardDidHide` and computes a
+bottom offset that leaves space for the filter bar (48 px) and, when there are
+enriched suggestions open, the 224 px suggestion popup:
+
+```ts
+const FILTER_BAR_HEIGHT = 48;
+const SUGGESTION_HEIGHT = hasSuggestions ? 224 : 0;
+const bottomOffset =
+  isActive && keyboardHeight > 0
+    ? keyboardHeight + FILTER_BAR_HEIGHT + SUGGESTION_HEIGHT + 4
+    : insets.bottom + 8;
+```
+
+When `searchBarPosition` is set to `"top"`, the bar sticks to the top inset
+instead. The bar can also be _hidden_ entirely (`actions.setHidden(true)`)
+while a bottom sheet such as the drawer editor is open, preventing focus
+fights.
+
+## Submit & fallbacks
+
+Pressing Enter calls `submitRef.current?.()`, which the drawer populates with
+`handleSubmitSearch`:
+
+1. If the top section has at least one result, launch it via its `onPress`.
+2. Otherwise, if the query is non-empty, forward it to the OpenClaw topic chat
+   as a pending auto-sent message — the launcher's conversational fallback
+   when nothing structured matches.
+3. If OpenClaw is not connected, route the user to the OpenClaw settings
+   screen instead.
+
+This makes the search bar a universal "do something with this text" input —
+close in spirit to Kvaesitso's web-search fallback but wired into the
+launcher's AI assistant instead.
+
+## Related
+
+- [App Drawer](./app-drawer) — hosts the search results list and owns
+  `useSearch`.
+- [Search implementation plan](https://github.com/Vijayabaskar56/launcher/blob/main/apps/native/docs/plans/2026-03-26-search-implementation.md)
+- [Enriched search bar plan](https://github.com/Vijayabaskar56/launcher/blob/main/apps/native/docs/plans/2026-03-27-enriched-search-bar-implementation.md)

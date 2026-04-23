@@ -295,7 +295,7 @@ export const DEFAULT_SETTINGS: LauncherSettingsData = {
     nextcloudUrl: "",
     openWeatherMapApiKey: "",
     searchEngine: "google",
-    weatherProvider: "openweathermap",
+    weatherProvider: "met-no",
   },
   locale: {
     measurementSystem: "system",

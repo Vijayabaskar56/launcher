@@ -10,6 +10,7 @@ import { PreferenceCategory } from "@/components/settings/preference-category";
 import { SettingsContext } from "@/context/settings";
 import { useThemeOverrides } from "@/context/theme-overrides";
 import { getSettings } from "@/lib/storage";
+import { toast } from "@/lib/toast";
 import type { LauncherSettingsData, ThemeSettings } from "@/types/settings";
 
 interface BackupActionProps {
@@ -200,11 +201,11 @@ const BackupSettings = () => {
     try {
       const json = buildExportPayload();
       await shareJsonFile(json, buildFileName(), "Export Launcher Settings");
+      toast.success("Settings exported");
     } catch (error) {
-      Alert.alert(
-        "Export Failed",
-        error instanceof Error ? error.message : "Unknown error"
-      );
+      toast.error("Export Failed", {
+        description: error instanceof Error ? error.message : "Unknown error",
+      });
     } finally {
       setBusy(false);
     }
@@ -221,10 +222,10 @@ const BackupSettings = () => {
       const parsed: unknown = JSON.parse(content);
 
       if (!validateImport(parsed)) {
-        Alert.alert(
-          "Invalid File",
-          "This file doesn't appear to be a valid launcher settings backup."
-        );
+        toast.error("Invalid File", {
+          description:
+            "This file doesn't appear to be a valid launcher settings backup.",
+        });
         return;
       }
 
@@ -236,10 +237,10 @@ const BackupSettings = () => {
           {
             onPress: () => {
               settingsCtx?.actions.replaceAll(parsed.settings);
-              Alert.alert(
-                "Restored",
-                "Settings have been restored. You may need to restart the app for all changes to take effect."
-              );
+              toast.success("Settings restored", {
+                description:
+                  "You may need to restart the app for all changes to take effect.",
+              });
             },
             style: "destructive",
             text: "Restore",
@@ -247,10 +248,9 @@ const BackupSettings = () => {
         ]
       );
     } catch (error) {
-      Alert.alert(
-        "Import Failed",
-        error instanceof Error ? error.message : "Unknown error"
-      );
+      toast.error("Import Failed", {
+        description: error instanceof Error ? error.message : "Unknown error",
+      });
     } finally {
       setBusy(false);
     }
@@ -263,11 +263,11 @@ const BackupSettings = () => {
     try {
       const json = buildThemeExportPayload();
       await shareJsonFile(json, buildThemeFileName(), "Export Launcher Theme");
+      toast.success("Theme exported");
     } catch (error) {
-      Alert.alert(
-        "Export Failed",
-        error instanceof Error ? error.message : "Unknown error"
-      );
+      toast.error("Export Failed", {
+        description: error instanceof Error ? error.message : "Unknown error",
+      });
     } finally {
       setBusy(false);
     }
@@ -284,10 +284,10 @@ const BackupSettings = () => {
       const parsed: unknown = JSON.parse(content);
 
       if (!validateThemeImport(parsed)) {
-        Alert.alert(
-          "Invalid File",
-          "This file doesn't appear to be a valid launcher theme file."
-        );
+        toast.error("Invalid File", {
+          description:
+            "This file doesn't appear to be a valid launcher theme file.",
+        });
         return;
       }
 
@@ -299,7 +299,7 @@ const BackupSettings = () => {
           {
             onPress: () => {
               settingsCtx?.actions.updateAppearance(parsed.theme);
-              Alert.alert("Applied", "Theme has been applied successfully.");
+              toast.success("Theme applied");
             },
             style: "destructive",
             text: "Apply",
@@ -307,10 +307,9 @@ const BackupSettings = () => {
         ]
       );
     } catch (error) {
-      Alert.alert(
-        "Import Failed",
-        error instanceof Error ? error.message : "Unknown error"
-      );
+      toast.error("Import Failed", {
+        description: error instanceof Error ? error.message : "Unknown error",
+      });
     } finally {
       setBusy(false);
     }
@@ -327,10 +326,7 @@ const BackupSettings = () => {
         {
           onPress: () => {
             settingsCtx?.actions.resetAll();
-            Alert.alert(
-              "Reset",
-              "All settings have been restored to defaults."
-            );
+            toast.success("Settings reset to defaults");
           },
           style: "destructive",
           text: "Reset",

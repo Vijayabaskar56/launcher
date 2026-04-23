@@ -1,0 +1,15 @@
+{
+  "title": "Features",
+  "pages": [
+    "homescreen",
+    "app-drawer",
+    "search",
+    "widgets",
+    "widgets/built-in",
+    "gestures",
+    "theming",
+    "i18n",
+    "openclaw",
+    "openclaw/protocol"
+  ]
+}

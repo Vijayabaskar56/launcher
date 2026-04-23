@@ -6,15 +6,12 @@ import {
   useMemo,
   useState,
 } from "react";
-import { Uniwind, useUniwind } from "uniwind";
 
 type SearchBarPosition = "top" | "bottom";
-type ThemeMode = "light" | "dark" | "system";
 
 interface LauncherConfig {
   searchBarPosition: SearchBarPosition;
   gridColumns: number;
-  themeMode: ThemeMode;
 }
 
 interface LauncherConfigContextValue {
@@ -22,9 +19,7 @@ interface LauncherConfigContextValue {
   actions: {
     setSearchBarPosition: (position: SearchBarPosition) => void;
     setGridColumns: (columns: number) => void;
-    setThemeMode: (mode: ThemeMode) => void;
   };
-  resolvedTheme: "light" | "dark";
 }
 
 const STORAGE_KEY = "launcher-config";
@@ -32,7 +27,6 @@ const STORAGE_KEY = "launcher-config";
 const defaultConfig: LauncherConfig = {
   gridColumns: 6,
   searchBarPosition: "bottom",
-  themeMode: "system",
 };
 
 export const LauncherConfigContext =
@@ -45,12 +39,6 @@ export const LauncherConfigProvider = ({
 }) => {
   const [config, setConfig] = useState<LauncherConfig>(defaultConfig);
   const [loaded, setLoaded] = useState(false);
-
-  const { theme: resolvedTheme } = useUniwind();
-
-  useEffect(() => {
-    Uniwind.setTheme(config.themeMode);
-  }, [config.themeMode]);
 
   useEffect(() => {
     const load = async () => {
@@ -82,20 +70,12 @@ export const LauncherConfigProvider = ({
     [config, persist]
   );
 
-  const setThemeMode = useCallback(
-    (mode: ThemeMode) => {
-      persist({ ...config, themeMode: mode });
-    },
-    [config, persist]
-  );
-
   const contextValue = useMemo(
     () => ({
-      actions: { setGridColumns, setSearchBarPosition, setThemeMode },
-      resolvedTheme: resolvedTheme as "light" | "dark",
+      actions: { setGridColumns, setSearchBarPosition },
       state: config,
     }),
-    [setGridColumns, setSearchBarPosition, setThemeMode, resolvedTheme, config]
+    [setGridColumns, setSearchBarPosition, config]
   );
 
   if (!loaded) {

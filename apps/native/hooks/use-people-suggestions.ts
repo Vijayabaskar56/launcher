@@ -20,8 +20,6 @@ export function usePeopleSuggestions(query: string): PersonSuggestion[] {
   const [contactPeople, setContactPeople] = useState<PersonSuggestion[]>([]);
 
   useEffect(() => {
-    let cancelled = false;
-
     const loadContacts = async () => {
       try {
         const { status } = await Contacts.getPermissionsAsync();
@@ -33,10 +31,6 @@ export function usePeopleSuggestions(query: string): PersonSuggestion[] {
           fields: [Contacts.Fields.Name, Contacts.Fields.Image],
           pageSize: 50,
         });
-
-        if (cancelled) {
-          return;
-        }
 
         const people: PersonSuggestion[] = data
           .filter((c) => c.name)
@@ -53,9 +47,6 @@ export function usePeopleSuggestions(query: string): PersonSuggestion[] {
     };
 
     loadContacts();
-    return () => {
-      cancelled = true;
-    };
   }, []);
 
   const allPeople = contactPeople.length > 0 ? contactPeople : MOCK_PEOPLE;

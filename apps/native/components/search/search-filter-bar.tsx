@@ -1,8 +1,9 @@
 import { Ionicons } from "@expo/vector-icons";
-import { useThemeColor } from "heroui-native";
-import { memo, useCallback, useEffect, useState } from "react";
-import { Keyboard, Pressable, ScrollView, Text, View } from "react-native";
+import { Chip, useThemeColor } from "heroui-native";
+import { memo, useCallback } from "react";
+import { Pressable, ScrollView, View } from "react-native";
 
+import { useKeyboardHeight } from "@/hooks/use-keyboard-height";
 import type { SearchFilter } from "@/types/search";
 
 type IoniconName = keyof typeof Ionicons.glyphMap;
@@ -35,22 +36,20 @@ const FilterPill = ({
   const muted = useThemeColor("muted");
 
   return (
-    <Pressable
+    <Chip
       onPress={onPress}
+      variant={active ? "primary" : "secondary"}
+      color="default"
       style={{
-        alignItems: "center",
         backgroundColor: active ? accent : "transparent",
         borderColor: active ? accent : muted,
-        borderRadius: 18,
         borderWidth: 1,
-        flexDirection: "row",
-        gap: 5,
         paddingHorizontal: 12,
         paddingVertical: 6,
       }}
     >
       <Ionicons name={icon} size={14} color={active ? "#fff" : foreground} />
-      <Text
+      <Chip.Label
         style={{
           color: active ? "#fff" : foreground,
           fontSize: 13,
@@ -58,8 +57,8 @@ const FilterPill = ({
         }}
       >
         {label}
-      </Text>
-    </Pressable>
+      </Chip.Label>
+    </Chip>
   );
 };
 
@@ -107,20 +106,7 @@ export const SearchFilterBar = memo(function SearchFilterBar({
   const foreground = useThemeColor("foreground");
   const muted = useThemeColor("muted");
   const surface = useThemeColor("surface");
-  const [keyboardHeight, setKeyboardHeight] = useState(0);
-
-  useEffect(() => {
-    const showSub = Keyboard.addListener("keyboardDidShow", (e) => {
-      setKeyboardHeight(e.endCoordinates.height);
-    });
-    const hideSub = Keyboard.addListener("keyboardDidHide", () => {
-      setKeyboardHeight(0);
-    });
-    return () => {
-      showSub.remove();
-      hideSub.remove();
-    };
-  }, []);
+  const keyboardHeight = useKeyboardHeight();
 
   // Show filters that have results, plus always show all when no results yet
   const visibleFilters =

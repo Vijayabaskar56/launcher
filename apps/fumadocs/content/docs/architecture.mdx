@@ -1,0 +1,170 @@
+---
+title: Architecture
+description: How the launcher monorepo is organized, why it ships custom Nitro modules, and how data flows from Android system services to the UI.
+icon: Layers
+---
+
+The launcher is a [Turborepo](https://turborepo.com) monorepo managed with Bun
+workspaces. It contains one shippable Android app, one docs site, and a handful
+of standalone [Nitro](https://nitro.margelo.com) packages that provide the native
+capabilities a home screen launcher needs but that Expo does not ship out of the box.
+
+## Repository layout
+
+```text
+launcher/
+├── apps/
+│   ├── native/      # The launcher itself — Expo app, Android target
+│   └── fumadocs/    # This documentation site (Fumadocs on TanStack Start)
+├── packages/
+│   ├── react-native-launcher-service/       # App listing, adaptive icons, shortcuts
+│   ├── react-native-notification-bridge/    # Notification listener, badges, media session
+│   ├── react-native-accessibility-actions/  # Lock, power dialog, notification shade
+│   ├── react-native-widget-host/            # Host real Android AppWidgets inside RN
+│   ├── react-native-openclaw-gateway/       # TLS chat RPC gateway for OpenClaw
+│   ├── components/                          # Shared UI primitives
+│   ├── config/                              # Shared tsconfig, ultracite, lint presets
+│   └── env/                                 # Typed environment loader (zod)
+├── turbo.json
+└── package.json     # Bun workspaces, ultracite, husky
+```
+
+Turbo pipelines (`dev`, `build`, `check-types`) fan out across every workspace;
+`bun run dev:native` filters to the app alone.
+
+## `apps/native` — the launcher
+
+An Android-only [Expo](https://docs.expo.dev) application running on React Native
+0.83 with the [New Architecture](https://reactnative.dev/docs/the-new-architecture/landing-page)
+(Fabric renderer + TurboModules) and the React Compiler enabled. Routing is
+handled by `expo-router` with a single-stack layout (home, settings); styling
+comes from [Uniwind](https://github.com/uniwind/uniwind) (Tailwind CSS v4 for
+React Native) on top of HeroUI Native.
+
+The app registers itself as a `HOME` intent handler via a local config plugin
+(`plugins/with-home-launcher`), and requests `QUERY_ALL_PACKAGES` so the app
+drawer can enumerate the device.
+
+## `apps/fumadocs` — this site
+
+[Fumadocs](https://fumadocs.dev) on TanStack Start. MDX content lives under
+`content/docs/`. This is where the documentation you are reading right now is
+authored.
+
+## Why custom Nitro modules?
+
+A launcher is one of the most privileged app categories on Android. The features
+below are simply not reachable from JavaScript through `expo-*` packages, and
+writing them as classic React Native TurboModules would mean a lot of JNI
+boilerplate and hand-written type bridges.
+
+[Nitro Modules](https://nitro.margelo.com) solves this: you define a TypeScript
+spec, run `nitrogen`, and get a generated JSI binding plus a Kotlin interface
+to implement. Calls are synchronous, typed, and cross the JS ↔ native boundary
+with effectively no serialization cost.
+
+Each package below exists because a specific Android surface had to be reached.
+
+### `react-native-launcher-service`
+
+Wraps `LauncherApps`, `PackageManager`, and `ShortcutManager`. Enumerates every
+installed app, resolves adaptive icons and icon packs, exposes app shortcuts
+(the long-press menu items), and dispatches launch intents. This is the spine of
+the app drawer and search results.
+
+### `react-native-notification-bridge`
+
+Implements a `NotificationListenerService` so the launcher can show unread badges
+on app icons, surface active media sessions for the music widget, and react to
+system notifications without polling. Requires the user to grant notification
+access in system settings.
+
+### `react-native-accessibility-actions`
+
+A tiny `AccessibilityService` that exposes privileged global actions —
+lock screen, power dialog, notification shade, quick settings, recents — so
+they can be bound to gestures. Android does not let normal apps trigger these
+any other way.
+
+### `react-native-widget-host`
+
+Hosts real Android `AppWidget`s (`AppWidgetHost` + `AppWidgetManager`) inside a
+React Native view. The widget is rendered by the system; the module manages
+binding, configuration activities, rebinding across resize, and forwarding
+updates into React state. Built-in widgets (weather, calendar, music) live in
+the app itself; third-party widgets flow through this module.
+
+### `react-native-openclaw-gateway`
+
+A typed client for the OpenClaw chat backend with pinned TLS trust and streaming
+RPCs. Kept as a Nitro module so the TLS pinning and long-lived socket live on
+the native side rather than being re-established from JS.
+
+## Data flow
+
+Every launcher feature follows the same shape: a native Android subsystem is
+wrapped by a Nitro module, flows across the JSI bridge into React state, and is
+rendered by Reanimated-driven UI.
+
+```text
+ ┌───────────────────────────┐
+ │ Android system services   │
+ │ LauncherApps, AppWidget,  │
+ │ NotificationListener, ... │
+ └─────────────┬─────────────┘
+               │ Kotlin callbacks
+ ┌─────────────▼─────────────┐
+ │ Nitro module (Kotlin)     │
+ │ implements generated spec │
+ └─────────────┬─────────────┘
+               │ JSI (synchronous, typed)
+ ┌─────────────▼─────────────┐
+ │ TS facade in packages/*   │
+ │ NitroModules.create<T>()  │
+ └─────────────┬─────────────┘
+               │ hooks + TanStack Query
+ ┌─────────────▼─────────────┐
+ │ React state / MMKV cache  │
+ └─────────────┬─────────────┘
+               │ props
+ ┌─────────────▼─────────────┐
+ │ Fabric UI + Reanimated 4  │
+ │ worklets on the UI thread │
+ └───────────────────────────┘
+```
+
+### New Architecture and worklets
+
+- **Fabric** renders the entire tree on the native UI thread — there is no
+  asynchronous shadow-tree round trip, which matters for a launcher where the
+  drawer must track the finger at 120 Hz.
+- **TurboModules / JSI** is what Nitro builds on. Module methods are plain C++
+  functions exposed to the JS runtime; no JSON bridge.
+- **Reanimated 4 worklets** run animation and gesture logic on the UI thread.
+  The pan gesture driving the app drawer, the dock reorder, and the widget
+  resize handles are all worklets — they never touch the JS thread during a
+  frame.
+
+<Callout type="warn">
+  Worklet boundaries matter. Anything captured into a worklet must be
+  serializable or already a shared value. Calls back into JS (for example to
+  `launcherService.launchApp(...)`) go through `runOnJS`, which hops the thread
+  exactly once per gesture end — not per frame.
+</Callout>
+
+## Further reading
+
+<Cards>
+  <Card title="Nitro Modules" href="https://nitro.margelo.com" />
+  <Card
+    title="React Native New Architecture"
+    href="https://reactnative.dev/docs/the-new-architecture/landing-page"
+  />
+  <Card
+    title="Reanimated"
+    href="https://docs.swmansion.com/react-native-reanimated/"
+  />
+  <Card title="Expo" href="https://docs.expo.dev" />
+  <Card title="Turborepo" href="https://turborepo.com" />
+  <Card title="Kvaesitso" href="https://kvaesitso.mm20.de" />
+</Cards>

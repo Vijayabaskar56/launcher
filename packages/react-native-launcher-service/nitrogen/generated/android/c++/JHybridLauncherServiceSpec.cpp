@@ -59,6 +59,11 @@ namespace margelo::nitro::launcherservice {
     auto __result = method(_javaPart);
     return static_cast<bool>(__result);
   }
+  bool JHybridLauncherServiceSpec::getIsWallpaperBlurSupported() {
+    static const auto method = _javaPart->javaClassStatic()->getMethod<jboolean()>("isWallpaperBlurSupported");
+    auto __result = method(_javaPart);
+    return static_cast<bool>(__result);
+  }
 
   // Methods
   std::vector<AppInfo> JHybridLauncherServiceSpec::getInstalledApps() {
@@ -133,6 +138,10 @@ namespace margelo::nitro::launcherservice {
   void JHybridLauncherServiceSpec::launchShortcut(const std::string& packageName, const std::string& shortcutId) {
     static const auto method = _javaPart->javaClassStatic()->getMethod<void(jni::alias_ref<jni::JString> /* packageName */, jni::alias_ref<jni::JString> /* shortcutId */)>("launchShortcut");
     method(_javaPart, jni::make_jstring(packageName), jni::make_jstring(shortcutId));
+  }
+  void JHybridLauncherServiceSpec::setWallpaperBlurRadius(double radius) {
+    static const auto method = _javaPart->javaClassStatic()->getMethod<void(double /* radius */)>("setWallpaperBlurRadius");
+    method(_javaPart, radius);
   }
 
 } // namespace margelo::nitro::launcherservice

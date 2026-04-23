@@ -27,7 +27,7 @@ interface UseEnrichedSearchResult {
   onSelectSuggestion: (
     suggestion: Suggestion,
     callbacks: SelectionCallbacks
-  ) => void;
+  ) => Promise<void>;
 }
 
 export interface SelectionCallbacks {
@@ -41,7 +41,7 @@ export interface SelectionCallbacks {
   insertText: (text: string) => void;
 }
 
-export function useEnrichedSearch(): UseEnrichedSearchResult {
+export const useEnrichedSearch = (): UseEnrichedSearchResult => {
   const [activeTrigger, setActiveTrigger] = useState<TriggerIndicator | null>(
     null
   );
@@ -115,7 +115,7 @@ export function useEnrichedSearch(): UseEnrichedSearchResult {
   }, []);
 
   const onSelectSuggestion = useCallback(
-    (suggestion: Suggestion, callbacks: SelectionCallbacks) => {
+    async (suggestion: Suggestion, callbacks: SelectionCallbacks) => {
       switch (suggestion.type) {
         case "person": {
           const person = suggestion.data as PersonSuggestion;
@@ -142,9 +142,16 @@ export function useEnrichedSearch(): UseEnrichedSearchResult {
         }
         case "command": {
           const command = suggestion.data as CommandSuggestion;
-          command.action();
-          // Clear entire input after command execution
-          callbacks.setValue("");
+          if (command.insertText) {
+            callbacks.setValue(command.insertText);
+          } else {
+            await command.action?.();
+            // Clear entire input after command execution
+            callbacks.setValue("");
+          }
+          break;
+        }
+        default: {
           break;
         }
       }
@@ -164,4 +171,4 @@ export function useEnrichedSearch(): UseEnrichedSearchResult {
     suggestions,
     triggerQuery,
   };
-}
+};

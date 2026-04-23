@@ -1,34 +1,79 @@
 ---
-title: Hello World
-description: Your favourite docs framework.
+title: Launcher
+description: A Kvaesitso-inspired Android launcher built with React Native, Expo, and Nitro modules.
 icon: Rocket
 ---
 
-Hey there! Fumadocs is the docs framework that also works on Tanstack Start!
+**Launcher** is an open-source Android home screen launcher written in TypeScript
+on top of React Native and Expo. It takes inspiration from
+[Kvaesitso](https://kvaesitso.mm20.de) — the search-first, widget-rich FOSS launcher
+for Android — and reimagines that experience on a modern cross-platform runtime,
+with deep system integration delivered through custom [Nitro modules](https://nitro.margelo.com).
 
-## Heading
+## Philosophy
 
-Hello World!
+Most React Native apps stop at the edge of the OS. A launcher cannot. It has to
+enumerate every installed app, render live system widgets, listen to notifications,
+read the battery, drive gestures at 120 Hz, and become the user's `HOME` intent
+target. That set of requirements is normally a reason to reach for pure Kotlin —
+but the JavaScript ecosystem has caught up.
+
+This project is a bet that with React Native's **New Architecture**, **Reanimated 4
+worklets**, and **Nitro** for typed native bindings, you can ship a launcher that
+feels indistinguishable from a hand-written native one, while keeping a
+declarative UI, hot reload, and a shared TypeScript codebase.
+
+<Callout type="info">
+  Launcher is Android-only. iOS does not permit third-party home screen
+  replacements, so the codebase targets `com.android.launcher` intents directly.
+</Callout>
+
+## Features at a glance
+
+- **App drawer** — alphabetical grid, hidden apps with unhide modal, per-app actions
+- **Global search** — apps, contacts, calendar, calculator, and web with filter chips
+- **Widgets** — hosts real Android `AppWidget`s via a custom Nitro module, plus built-in weather, music, and calendar widgets
+- **Gestures** — Kvaesitso-style home screen gestures (swipe up/down/left/right, double-tap, long-press) bound to configurable actions
+- **OpenClaw chat** — on-device assistant integration over a TLS gateway
+- **Material You theming** — dynamic color extraction from wallpaper, light/dark, per-scheme overrides
+- **Internationalization** — `expo-localization` driven, locale-aware formatting
+- **Accessibility actions** — lock screen, power dialog, notification shade, quick settings via an `AccessibilityService`
+
+## Tech stack
+
+| Layer           | Choice                                                                                                                                                         |
+| --------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Runtime         | [React Native 0.83](https://reactnative.dev) on the [New Architecture](https://reactnative.dev/docs/the-new-architecture/landing-page) (Fabric + TurboModules) |
+| App framework   | [Expo SDK 55](https://docs.expo.dev) with `expo-router`, `expo-dev-client`, React Compiler                                                                     |
+| Native bindings | [Nitro Modules](https://nitro.margelo.com) — typed, zero-overhead JSI bridges written in Kotlin                                                                |
+| Animation       | [Reanimated 4](https://docs.swmansion.com/react-native-reanimated/) + `react-native-gesture-handler`                                                           |
+| Styling         | [Uniwind](https://github.com/uniwind/uniwind) (Tailwind CSS v4 for RN)                                                                                         |
+| UI kit          | [HeroUI Native](https://heroui.com) + `@gorhom/bottom-sheet`                                                                                                   |
+| State & data    | React Context, `react-native-mmkv`, TanStack Query                                                                                                             |
+| Monorepo        | [Turborepo](https://turborepo.com) + Bun workspaces                                                                                                            |
+| Docs            | [Fumadocs](https://fumadocs.dev) on TanStack Start                                                                                                             |
+
+## Explore the docs
 
 <Cards>
   <Card
-    title="Learn more about Tanstack Start"
-    href="https://tanstack.com/start"
+    title="Architecture"
+    href="/docs/architecture"
+    description="Turborepo layout, Nitro modules, and the data flow from Android system services to the UI."
   />
-  <Card title="Learn more about Fumadocs" href="https://fumadocs.dev" />
+  <Card
+    title="Kvaesitso"
+    href="https://kvaesitso.mm20.de"
+    description="The original FOSS Android launcher that inspired this project."
+  />
+  <Card
+    title="Nitro Modules"
+    href="https://nitro.margelo.com"
+    description="The native-binding toolchain this project uses instead of TurboModules directly."
+  />
+  <Card
+    title="Reanimated"
+    href="https://docs.swmansion.com/react-native-reanimated/"
+    description="Worklet-driven animations powering the drawer, dock, and gesture system."
+  />
 </Cards>
-
-### CodeBlock
-
-```ts
-console.log("Hello World");
-```
-
-#### Table
-
-| Head                            | Description                         |
-| ------------------------------- | ----------------------------------- |
-| `hello`                         | Hello World                         |
-| very **important**              | Hey                                 |
-| _Surprisingly_                  | Fumadocs                            |
-| very long text that looks weird | hello world hello world hello world |

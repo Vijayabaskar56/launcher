@@ -28,6 +28,10 @@ abstract class HybridLauncherServiceSpec: HybridObject() {
   @get:DoNotStrip
   @get:Keep
   abstract val hasShortcutHostPermission: Boolean
+  
+  @get:DoNotStrip
+  @get:Keep
+  abstract val isWallpaperBlurSupported: Boolean
 
   // Methods
   @DoNotStrip
@@ -61,6 +65,10 @@ abstract class HybridLauncherServiceSpec: HybridObject() {
   @DoNotStrip
   @Keep
   abstract fun launchShortcut(packageName: String, shortcutId: String): Unit
+  
+  @DoNotStrip
+  @Keep
+  abstract fun setWallpaperBlurRadius(radius: Double): Unit
 
   // Default implementation of `HybridObject.toString()`
   override fun toString(): String {

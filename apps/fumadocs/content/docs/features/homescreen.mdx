@@ -1,0 +1,118 @@
+---
+title: Home Screen
+description: Layout, composition, and runtime behavior of the launcher home screen.
+---
+
+The home screen is the launcher's root surface. It composes a clock, a dock of
+pinned apps, a search bar, and two sliding panels (the app drawer and the
+widget panel) into a single gesture-driven view. The implementation lives in
+`apps/native/app/index.tsx`.
+
+## Layout
+
+The home screen is a single full-screen `View` stacked in three layers:
+
+1. A `SearchBar.Frame` at the top or bottom (configurable via
+   `launcherConfig.searchBarPosition`).
+2. A gesture-wrapped content layer containing the `ClockDisplay` and the
+   `DockArea`.
+3. Two directional panels — `AppDrawer` and `WidgetPanel` — that slide in from
+   an edge of the screen.
+4. A non-interactive `ChargingGlow` overlay pinned to the bottom.
+
+```tsx
+<GestureDetector gesture={gesture}>
+  <Animated.View style={[panelFadeStyle, gestureContentStyle]}>
+    <View style={{ paddingTop: clockAreaPaddingTop }}>
+      <ClockDisplay />
+    </View>
+    <DockArea baseBottom={dockBaseBottom} />
+  </Animated.View>
+</GestureDetector>
+```
+
+Padding is derived from `useSafeAreaInsets()` and flips depending on whether
+the search bar sits at the top or bottom, so the clock always hangs beneath
+the status bar and the dock always clears the navigation bar and search input.
+
+## Clock display
+
+`components/clock-display.tsx` renders either a `DigitalClock` or `AnalogClock`
+depending on `settings.homescreen.clockStyle`. It subscribes to `useClock`
+(with optional seconds) and `useBattery`. A compact battery readout appears
+beneath the clock when `batteryIndicator` is set to `"always"`, or
+when `"charging-or-low"` matches the current battery state.
+
+## Dock
+
+`components/dock-row.tsx` reads pinned apps from `DrawerMetadataContext`
+(`getOrderedPinnedPackages`) and renders them in a responsive grid whose column
+count comes from `launcherConfig.gridColumns`. The icon size scales with the
+screen width:
+
+```ts
+const cellWidth = Math.floor((screenWidth - 32) / columns);
+const iconSize = Math.max(44, Math.min(56, cellWidth - 16));
+```
+
+Multiple rows are supported via `settings.homescreen.dockRowCount`. Rows with
+fewer apps than the configured column count distribute evenly instead of
+left-aligning. Each `DockAppIcon` launches its target through
+`expo-intent-launcher`'s `openApplication`.
+
+## Panels: app drawer and widget panel
+
+Both panels are driven by shared values owned by the home screen:
+
+- `drawerOffset` / `widgetOffset` — current distance from the open position.
+- `drawerSlideFrom` / `widgetSlideFrom` — which edge the panel slid in from
+  (`"top" | "bottom" | "left" | "right"`).
+- `drawerIsAtTop` / `drawerIsAtBottom` / `widgetIsAtTop` / `widgetIsAtBottom`
+  — scroll boundary flags fed back from inside the panels so gestures on the
+  home screen know whether a vertical swipe should hand off.
+
+Opening a panel cancels any running animation, snaps the offset to the full
+screen size on the chosen axis, and then animates to `0` with
+`withTiming({ duration: 300, easing: Easing.out(Easing.cubic) })`. Closing
+reverses the animation back to the edge. The Android hardware back button
+closes whichever panel is open before falling through.
+
+A `useAnimatedReaction` on each offset flips a React state boolean
+(`isDrawerOpen`, `isWidgetPanelOpen`) whenever the panel crosses the "fully
+open" threshold. That boolean drives the system bar controller
+(`useSystemBars`) so the status and navigation bars re-show when a panel is
+visible and hide again on the bare home screen.
+
+The content layer fades out as either panel opens via `panelFadeStyle`, which
+computes `min(drawerProgress, widgetProgress)` in a single worklet so the
+home screen dims even when both panels are mid-animation.
+
+## Charging glow
+
+`components/charging-glow.tsx` renders a subtle indigo glow at the bottom of
+the screen while the device is charging. It's gated on both
+`settings.homescreen.chargingAnimation` and `useBattery().isCharging`. The
+pulse uses Reanimated v4 CSS animations (`animationName`,
+`animationIterationCount: "infinite"`) so it runs on the UI thread without
+any worklet overhead, and two stacked semi-transparent views approximate a
+soft vertical gradient.
+
+## Search bar composition
+
+`SearchBarContainer` is a thin wrapper that adapts the search bar chrome to
+the current state. When the search bar is active or the drawer is open, it
+paints a dark pill behind the input; when there's search text, a
+`TopicPills` row fades in above with a 220 ms entry. Activating the search
+bar closes the widget panel and opens the drawer from the bottom regardless
+of which swipe direction was configured, because search always wants the
+list-style reveal.
+
+## Related files
+
+- `apps/native/app/index.tsx`
+- `apps/native/app/_layout.tsx`
+- `apps/native/components/dock-row.tsx`
+- `apps/native/components/clock-display.tsx`
+- `apps/native/components/charging-glow.tsx`
+- `apps/native/docs/plans/2026-03-21-launcher-ui-implementation.md`
+- `apps/native/docs/plans/2026-03-25-homescreen-features-implementation.md`

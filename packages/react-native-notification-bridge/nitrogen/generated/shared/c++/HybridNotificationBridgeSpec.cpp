@@ -15,13 +15,16 @@ namespace margelo::nitro::notificationbridge {
     // load custom methods/properties
     registerHybrids(this, [](Prototype& prototype) {
       prototype.registerHybridGetter("isNotificationListenerEnabled", &HybridNotificationBridgeSpec::getIsNotificationListenerEnabled);
+      prototype.registerHybridGetter("canSeek", &HybridNotificationBridgeSpec::getCanSeek);
       prototype.registerHybridMethod("openNotificationListenerSettings", &HybridNotificationBridgeSpec::openNotificationListenerSettings);
       prototype.registerHybridMethod("onNotificationPosted", &HybridNotificationBridgeSpec::onNotificationPosted);
       prototype.registerHybridMethod("onNotificationRemoved", &HybridNotificationBridgeSpec::onNotificationRemoved);
       prototype.registerHybridMethod("onMediaMetadataChanged", &HybridNotificationBridgeSpec::onMediaMetadataChanged);
       prototype.registerHybridMethod("onPlaybackStateChanged", &HybridNotificationBridgeSpec::onPlaybackStateChanged);
+      prototype.registerHybridMethod("getPlaybackPosition", &HybridNotificationBridgeSpec::getPlaybackPosition);
       prototype.registerHybridMethod("play", &HybridNotificationBridgeSpec::play);
       prototype.registerHybridMethod("pause", &HybridNotificationBridgeSpec::pause);
+      prototype.registerHybridMethod("seekTo", &HybridNotificationBridgeSpec::seekTo);
       prototype.registerHybridMethod("skipToNext", &HybridNotificationBridgeSpec::skipToNext);
       prototype.registerHybridMethod("skipToPrevious", &HybridNotificationBridgeSpec::skipToPrevious);
     });

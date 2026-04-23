@@ -1,4 +1,4 @@
-/* eslint-disable unicorn/filename-case, @typescript-eslint/no-explicit-any, @typescript-eslint/ban-ts-comment, import/first */
+/* eslint-disable */
 
 // @ts-nocheck
 
@@ -17,34 +17,34 @@ import { Route as LlmsDotmdxDocsSplatRouteImport } from "./routes/llms[.]mdx.doc
 import { Route as LlmsDottxtRouteImport } from "./routes/llms[.]txt";
 
 const LlmsDottxtRoute = LlmsDottxtRouteImport.update({
-  getParentRoute: () => rootRouteImport,
   id: "/llms.txt",
   path: "/llms.txt",
+  getParentRoute: () => rootRouteImport,
 } as any);
 const LlmsFullDottxtRoute = LlmsFullDottxtRouteImport.update({
-  getParentRoute: () => rootRouteImport,
   id: "/llms-full.txt",
   path: "/llms-full.txt",
+  getParentRoute: () => rootRouteImport,
 } as any);
 const IndexRoute = IndexRouteImport.update({
-  getParentRoute: () => rootRouteImport,
   id: "/",
   path: "/",
+  getParentRoute: () => rootRouteImport,
 } as any);
 const DocsSplatRoute = DocsSplatRouteImport.update({
-  getParentRoute: () => rootRouteImport,
   id: "/docs/$",
   path: "/docs/$",
+  getParentRoute: () => rootRouteImport,
 } as any);
 const ApiSearchRoute = ApiSearchRouteImport.update({
-  getParentRoute: () => rootRouteImport,
   id: "/api/search",
   path: "/api/search",
+  getParentRoute: () => rootRouteImport,
 } as any);
 const LlmsDotmdxDocsSplatRoute = LlmsDotmdxDocsSplatRouteImport.update({
-  getParentRoute: () => rootRouteImport,
   id: "/llms.mdx/docs/$",
   path: "/llms.mdx/docs/$",
+  getParentRoute: () => rootRouteImport,
 } as any);
 
 export interface FileRoutesByFullPath {
@@ -156,12 +156,12 @@ declare module "@tanstack/react-router" {
 }
 
 const rootRouteChildren: RootRouteChildren = {
+  IndexRoute: IndexRoute,
+  LlmsFullDottxtRoute: LlmsFullDottxtRoute,
+  LlmsDottxtRoute: LlmsDottxtRoute,
   ApiSearchRoute: ApiSearchRoute,
   DocsSplatRoute: DocsSplatRoute,
-  IndexRoute: IndexRoute,
   LlmsDotmdxDocsSplatRoute: LlmsDotmdxDocsSplatRoute,
-  LlmsDottxtRoute: LlmsDottxtRoute,
-  LlmsFullDottxtRoute: LlmsFullDottxtRoute,
 };
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

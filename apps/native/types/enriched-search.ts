@@ -21,10 +21,12 @@ export interface EmojiSuggestion {
 }
 
 export interface CommandSuggestion {
+  action?: () => Promise<void> | void;
+  aliases?: string[];
   command: string;
   label: string;
   icon: string;
-  action: () => void;
+  insertText?: string;
 }
 
 export type Suggestion =
