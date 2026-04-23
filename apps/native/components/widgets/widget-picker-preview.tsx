@@ -16,9 +16,6 @@ interface AppPreviewInfo {
   packageName: string;
 }
 
-const CARD_BACKGROUND = "rgba(255,255,255,0.05)";
-const PREVIEW_BACKGROUND = "rgba(255,255,255,0.04)";
-
 const PreviewShell = memo(function PreviewShell({
   children,
   disabled = false,
@@ -57,30 +54,29 @@ const PreviewShell = memo(function PreviewShell({
       style={pressStyle}
     >
       <Card
-        className="overflow-hidden rounded-[28px] border border-white/8"
+        className="overflow-hidden rounded-[28px] border border-border/40"
         variant="transparent"
-        style={{ backgroundColor: CARD_BACKGROUND }}
       >
-        <Card.Body className="gap-4 p-4">
+        <Card.Body className="gap-4 bg-surface-secondary p-4">
           <View
-            className="overflow-hidden rounded-[22px] border border-white/8 p-4"
-            style={{ backgroundColor: PREVIEW_BACKGROUND, minHeight: 152 }}
+            className="overflow-hidden rounded-[22px] border border-border/40 bg-background p-4"
+            style={{ minHeight: 152 }}
           >
             {children}
           </View>
 
           <View className="gap-1">
-            <Card.Title className="text-base font-semibold text-white">
+            <Card.Title className="text-base font-semibold text-foreground">
               {title}
             </Card.Title>
-            <Card.Description className="text-sm text-white/55">
+            <Card.Description className="text-sm text-muted-foreground">
               {subtitle}
             </Card.Description>
           </View>
 
           <View className="flex-row items-center justify-between">
             {footer ?? (
-              <Text className="text-xs font-medium uppercase tracking-[1.4px] text-white/45">
+              <Text className="text-xs font-medium uppercase tracking-[1.4px] text-muted-foreground">
                 Tap to add
               </Text>
             )}
@@ -94,10 +90,10 @@ const PreviewShell = memo(function PreviewShell({
 
 const SmallStat = ({ label, value }: { label: string; value: string }) => (
   <View className="gap-1">
-    <Text className="text-[11px] uppercase tracking-[1.2px] text-white/35">
+    <Text className="text-[11px] uppercase tracking-[1.2px] text-muted-foreground">
       {label}
     </Text>
-    <Text className="text-sm font-semibold text-white/90">{value}</Text>
+    <Text className="text-sm font-semibold text-foreground">{value}</Text>
   </View>
 );
 
@@ -126,12 +122,16 @@ const BuiltinWidgetPreviewCard = memo(function BuiltinWidgetPreviewCard({
         return (
           <View className="flex-1 justify-between">
             <View className="flex-row items-center justify-between">
-              <Text className="text-sm font-medium text-white/70">Battery</Text>
+              <Text className="text-sm font-medium text-muted-foreground">
+                Battery
+              </Text>
               <IconAccent name={ICON_MAP.battery} size={20} />
             </View>
             <View className="gap-2">
-              <Text className="text-5xl font-semibold text-white">78%</Text>
-              <View className="h-2 rounded-full bg-white/10">
+              <Text className="text-5xl font-semibold text-foreground">
+                78%
+              </Text>
+              <View className="h-2 rounded-full bg-surface-secondary">
                 <View
                   className="h-2 rounded-full"
                   style={{ backgroundColor: accent, width: "78%" }}
@@ -146,22 +146,24 @@ const BuiltinWidgetPreviewCard = memo(function BuiltinWidgetPreviewCard({
           <View className="flex-1 justify-between">
             <View className="flex-row items-center justify-between">
               <View>
-                <Text className="text-sm font-medium text-white/70">
+                <Text className="text-sm font-medium text-muted-foreground">
                   Tuesday
                 </Text>
-                <Text className="text-4xl font-semibold text-white">07</Text>
+                <Text className="text-4xl font-semibold text-foreground">
+                  07
+                </Text>
               </View>
               <IconAccent name={ICON_MAP.calendar} size={20} />
             </View>
             <View className="gap-2">
-              <View className="rounded-2xl bg-white/8 px-3 py-2">
-                <Text className="text-sm font-medium text-white/90">
+              <View className="rounded-2xl bg-surface-secondary px-3 py-2">
+                <Text className="text-sm font-medium text-foreground">
                   Team standup
                 </Text>
-                <Text className="text-xs text-white/45">11:00 AM</Text>
+                <Text className="text-xs text-muted-foreground">11:00 AM</Text>
               </View>
-              <View className="rounded-2xl bg-white/6 px-3 py-2">
-                <Text className="text-sm font-medium text-white/70">
+              <View className="rounded-2xl bg-surface-secondary px-3 py-2">
+                <Text className="text-sm font-medium text-foreground">
                   Design sync
                 </Text>
               </View>
@@ -173,14 +175,16 @@ const BuiltinWidgetPreviewCard = memo(function BuiltinWidgetPreviewCard({
         return (
           <View className="flex-1 justify-between">
             <View className="flex-row items-center justify-between">
-              <Text className="text-sm font-medium text-white/70">
+              <Text className="text-sm font-medium text-muted-foreground">
                 Clock & Date
               </Text>
               <IconAccent name={ICON_MAP.clock} size={20} />
             </View>
             <View>
-              <Text className="text-5xl font-semibold text-white">17:29</Text>
-              <Text className="mt-2 text-sm text-white/45">
+              <Text className="text-5xl font-semibold text-foreground">
+                17:29
+              </Text>
+              <Text className="mt-2 text-sm text-muted-foreground">
                 Tuesday, April 7
               </Text>
             </View>
@@ -196,14 +200,16 @@ const BuiltinWidgetPreviewCard = memo(function BuiltinWidgetPreviewCard({
                 style={{ backgroundColor: "rgba(255,143,177,0.25)" }}
               />
               <View className="flex-1 justify-center gap-1">
-                <Text className="text-base font-semibold text-white">
+                <Text className="text-base font-semibold text-foreground">
                   Sunset Drive
                 </Text>
-                <Text className="text-sm text-white/45">Chromatics</Text>
+                <Text className="text-sm text-muted-foreground">
+                  Chromatics
+                </Text>
               </View>
             </View>
             <View className="gap-3">
-              <View className="h-1.5 rounded-full bg-white/10">
+              <View className="h-1.5 rounded-full bg-surface-secondary">
                 <View
                   className="h-1.5 rounded-full"
                   style={{ backgroundColor: accent, width: "44%" }}
@@ -211,7 +217,7 @@ const BuiltinWidgetPreviewCard = memo(function BuiltinWidgetPreviewCard({
               </View>
               <View className="flex-row items-center justify-between px-4">
                 <Icon name={ICON_MAP.skipBack} size={18} />
-                <View className="rounded-full bg-white px-3 py-3">
+                <View className="rounded-full bg-surface-secondary px-3 py-3">
                   <Icon name={ICON_MAP.pause} size={18} />
                 </View>
                 <Icon name={ICON_MAP.skipForward} size={18} />
@@ -224,11 +230,15 @@ const BuiltinWidgetPreviewCard = memo(function BuiltinWidgetPreviewCard({
         return (
           <View className="flex-1 justify-between">
             <View className="flex-row items-center justify-between">
-              <Text className="text-sm font-medium text-white/70">Weather</Text>
+              <Text className="text-sm font-medium text-muted-foreground">
+                Weather
+              </Text>
               <IconAccent name={ICON_MAP.weather} size={20} />
             </View>
             <View className="gap-3">
-              <Text className="text-5xl font-semibold text-white">28°</Text>
+              <Text className="text-5xl font-semibold text-foreground">
+                28°
+              </Text>
               <View className="flex-row items-center justify-between">
                 <SmallStat label="Condition" value="Clear" />
                 <SmallStat label="High" value="31°" />
@@ -249,7 +259,7 @@ const BuiltinWidgetPreviewCard = memo(function BuiltinWidgetPreviewCard({
       footer={
         <View className="flex-row items-center gap-2">
           <IconAccent name={ICON_MAP[WIDGET_ICONS[widgetId]]} size={16} />
-          <Text className="text-xs font-medium uppercase tracking-[1.4px] text-white/45">
+          <Text className="text-xs font-medium uppercase tracking-[1.4px] text-muted-foreground">
             Tap to add
           </Text>
         </View>
@@ -285,7 +295,7 @@ const WidgetGridPreview = ({ count }: { count: number }) => {
       {items.map((item) => (
         <View
           key={item.id}
-          className="h-10 rounded-2xl bg-white/10"
+          className="h-10 rounded-2xl bg-surface-secondary"
           style={{ width: item.width }}
         />
       ))}
@@ -315,8 +325,8 @@ const NativeWidgetPreviewCard = memo(function NativeWidgetPreviewCard({
     if (isWide) {
       return (
         <View className="gap-3">
-          <View className="flex-row items-center rounded-full bg-white/12 px-4 h-12">
-            <Text className="text-sm text-white/45">Search</Text>
+          <View className="flex-row items-center rounded-full bg-surface-secondary px-4 h-12">
+            <Text className="text-sm text-muted-foreground">Search</Text>
           </View>
           <WidgetGridPreview count={3} />
         </View>
@@ -326,7 +336,7 @@ const NativeWidgetPreviewCard = memo(function NativeWidgetPreviewCard({
     if (isTall) {
       return (
         <View className="gap-2">
-          <View className="h-16 rounded-[20px] bg-white/12" />
+          <View className="h-16 rounded-[20px] bg-surface-secondary" />
           <WidgetGridPreview count={4} />
         </View>
       );
@@ -335,7 +345,7 @@ const NativeWidgetPreviewCard = memo(function NativeWidgetPreviewCard({
     return (
       <View className="gap-2">
         <WidgetGridPreview count={4} />
-        <View className="h-12 rounded-[20px] bg-white/8" />
+        <View className="h-12 rounded-[20px] bg-surface-secondary" />
       </View>
     );
   }, [isTall, isWide]);
@@ -360,11 +370,11 @@ const NativeWidgetPreviewCard = memo(function NativeWidgetPreviewCard({
               />
             </View>
           ) : (
-            <View className="items-center justify-center rounded-full bg-white/10 p-1.5">
+            <View className="items-center justify-center rounded-full bg-surface-secondary p-1.5">
               <Icon name={ICON_MAP.grid} size={14} />
             </View>
           )}
-          <Text className="text-xs font-medium uppercase tracking-[1.4px] text-white/45">
+          <Text className="text-xs font-medium uppercase tracking-[1.4px] text-muted-foreground">
             {isBusy ? "Waiting for Android…" : "Tap to add"}
           </Text>
         </View>
@@ -384,12 +394,12 @@ const NativeWidgetPreviewCard = memo(function NativeWidgetPreviewCard({
               />
             </View>
           ) : (
-            <View className="items-center justify-center rounded-full bg-white/10 p-2">
+            <View className="items-center justify-center rounded-full bg-surface-secondary p-2">
               <Icon name={ICON_MAP.grid} size={18} />
             </View>
           )}
-          <View className="rounded-full bg-white/8 px-2.5 py-1">
-            <Text className="text-[11px] font-medium text-white/55">
+          <View className="rounded-full bg-surface-secondary px-2.5 py-1">
+            <Text className="text-[11px] font-medium text-muted-foreground">
               {Math.round(minWidth)} x {Math.round(minHeight)}
             </Text>
           </View>

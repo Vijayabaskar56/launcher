@@ -4,17 +4,17 @@ import { AppListContext } from "@/context/app-list";
 import { DrawerMetadataContext } from "@/context/drawer-metadata";
 import type { AppVisibility } from "@/context/drawer-metadata";
 import { SettingsContext } from "@/context/settings";
+import { useSmartCalculator } from "@/hooks/use-smart-calculator";
 import { getSearchActions } from "@/lib/search-actions";
 import { appProvider } from "@/lib/search-providers/app-provider";
-import { calculatorProvider } from "@/lib/search-providers/calculator-provider";
 import { calendarProvider } from "@/lib/search-providers/calendar-provider";
 import { contactProvider } from "@/lib/search-providers/contact-provider";
 import { currencyProvider } from "@/lib/search-providers/currency-provider";
 import { locationProvider } from "@/lib/search-providers/location-provider";
-import { unitConverterProvider } from "@/lib/search-providers/unit-converter-provider";
 import { websiteProvider } from "@/lib/search-providers/website-provider";
 import { wikipediaProvider } from "@/lib/search-providers/wikipedia-provider";
 import { createSearchSession, getAvailableFilters } from "@/lib/search-service";
+import type { SmartCalculatorResult } from "@/lib/smart-calculator/types";
 import { storage } from "@/lib/storage";
 import { getMaxUsage, getUsageCounts, recordLaunch } from "@/lib/usage-tracker";
 import type {
@@ -30,6 +30,7 @@ const NETWORK_STORAGE_KEY = "search-allow-network";
 
 interface UseSearchResult {
   results: Map<SearchResultType, SearchResult[]>;
+  calculatorResult: SmartCalculatorResult | null;
   actions: SearchActionMatch[];
   isSearching: boolean;
   activeFilters: Set<SearchFilter>;
@@ -45,6 +46,9 @@ export const useSearch = (query: string): UseSearchResult => {
   const drawerMetadata = use(DrawerMetadataContext);
   const settingsCtx = use(SettingsContext);
   const settings = settingsCtx?.state;
+  const smartCalculatorQuery =
+    settings?.search.calculator || settings?.search.unitConverter ? query : "";
+  const { result: calculatorResult } = useSmartCalculator(smartCalculatorQuery);
 
   const [results, setResults] = useState<Map<SearchResultType, SearchResult[]>>(
     new Map()
@@ -67,12 +71,6 @@ export const useSearch = (query: string): UseSearchResult => {
     const providers: SearchProvider[] = [];
     if (settings.search.searchAllApps) {
       providers.push(appProvider);
-    }
-    if (settings.search.calculator) {
-      providers.push(calculatorProvider);
-    }
-    if (settings.search.unitConverter) {
-      providers.push(unitConverterProvider);
     }
     if (settings.search.currencyConverter) {
       providers.push(currencyProvider);
@@ -223,6 +221,7 @@ export const useSearch = (query: string): UseSearchResult => {
     activeFilters,
     allowNetwork,
     availableFilters,
+    calculatorResult,
     handleToggleFilter,
     handleToggleNetwork,
     isSearching: query.trim().length > 0,

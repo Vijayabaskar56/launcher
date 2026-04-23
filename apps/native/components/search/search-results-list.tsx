@@ -4,6 +4,7 @@ import { SectionList, Text, View } from "react-native";
 
 import { SettingsContext } from "@/context/settings";
 import { sortedSections } from "@/lib/search-service";
+import type { SmartCalculatorResult } from "@/lib/smart-calculator/types";
 import { SECTION_LABELS } from "@/types/search";
 import type {
   SearchActionMatch,
@@ -12,6 +13,7 @@ import type {
   SearchResultType,
 } from "@/types/search";
 
+import { CalculatorCard } from "./calculator-card";
 import { ContactResultItem } from "./contact-result-item";
 import { PermissionPromptItem } from "./permission-prompt-item";
 import { SearchActionRow } from "./search-action-row";
@@ -67,6 +69,7 @@ const RenderItem = ({
 
 interface SearchResultsListProps {
   results: Map<SearchResultType, SearchResult[]>;
+  calculatorResult?: SmartCalculatorResult | null;
   actions: SearchActionMatch[];
   activeFilters: Set<SearchFilter>;
   availableFilters: Set<SearchFilter>;
@@ -78,6 +81,7 @@ interface SearchResultsListProps {
 
 export const SearchResultsList = memo(function SearchResultsList({
   results,
+  calculatorResult,
   actions,
   activeFilters,
   availableFilters,
@@ -102,7 +106,8 @@ export const SearchResultsList = memo(function SearchResultsList({
     }));
   }, [results, activeFilters]);
 
-  const hasResults = sections.length > 0 || actions.length > 0;
+  const hasResults =
+    sections.length > 0 || actions.length > 0 || calculatorResult !== null;
 
   const keyExtractor = useCallback((item: SearchResult) => item.id, []);
 
@@ -120,6 +125,16 @@ export const SearchResultsList = memo(function SearchResultsList({
     [callOnTap]
   );
 
+  const header = useMemo(
+    () => (
+      <View>
+        <SearchActionRow actions={actions} />
+        {calculatorResult ? <CalculatorCard result={calculatorResult} /> : null}
+      </View>
+    ),
+    [actions, calculatorResult]
+  );
+
   return (
     <View style={{ flex: 1 }}>
       <SectionList
@@ -128,7 +143,7 @@ export const SearchResultsList = memo(function SearchResultsList({
         keyboardDismissMode="on-drag"
         keyboardShouldPersistTaps="handled"
         stickySectionHeadersEnabled={false}
-        ListHeaderComponent={<SearchActionRow actions={actions} />}
+        ListHeaderComponent={header}
         renderSectionHeader={renderSectionHeader}
         renderItem={renderItem}
         ListEmptyComponent={

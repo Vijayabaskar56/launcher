@@ -8,8 +8,6 @@ export type SearchResultType =
   | "app"
   | "contact"
   | "calendar"
-  | "calculator"
-  | "unit-converter"
   | "currency"
   | "wikipedia"
   | "website"
@@ -65,12 +63,10 @@ export type SearchFilter = "apps" | "contacts" | "events" | "tools" | "web";
 export const RESULT_TYPE_TO_FILTER: Record<SearchResultType, SearchFilter> = {
   action: "apps",
   app: "apps",
-  calculator: "tools",
   calendar: "events",
   contact: "contacts",
   currency: "tools",
   location: "web",
-  "unit-converter": "tools",
   website: "web",
   wikipedia: "web",
 };
@@ -79,8 +75,6 @@ export const RESULT_TYPE_TO_FILTER: Record<SearchResultType, SearchFilter> = {
 export const SECTION_ORDER: SearchResultType[] = [
   "action",
   "app",
-  "calculator",
-  "unit-converter",
   "currency",
   "contact",
   "calendar",
@@ -92,12 +86,10 @@ export const SECTION_ORDER: SearchResultType[] = [
 export const SECTION_LABELS: Record<SearchResultType, string> = {
   action: "Quick Actions",
   app: "Apps",
-  calculator: "Calculator",
   calendar: "Calendar",
   contact: "Contacts",
   currency: "Currency",
   location: "Places",
-  "unit-converter": "Unit Converter",
   website: "Website",
   wikipedia: "Wikipedia",
 };

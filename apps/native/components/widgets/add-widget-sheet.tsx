@@ -252,7 +252,9 @@ const AddWidgetSheet = function AddWidgetSheet({
         keyboardShouldPersistTaps="handled"
       >
         <View className="gap-2 pt-1">
-          <Text className="text-2xl font-semibold text-white">Add widgets</Text>
+          <Text className="text-2xl font-semibold text-foreground">
+            Add widgets
+          </Text>
           <Text className="text-sm leading-5 text-muted-foreground">
             Tap any preview card to add it. Android widgets that need
             customization will open their native setup before being inserted.
@@ -304,10 +306,10 @@ const AddWidgetSheet = function AddWidgetSheet({
             </View>
 
             <Accordion
-              className="rounded-[28px] border border-white/8 px-2"
+              className="rounded-[28px] border border-border/40 px-2"
               classNames={{
-                container: "bg-white/5",
-                separator: "bg-white/8",
+                container: "bg-surface-secondary",
+                separator: "bg-border/40",
               }}
               onValueChange={handleAccordionValueChange}
               selectionMode="multiple"
@@ -336,13 +338,13 @@ const AddWidgetSheet = function AddWidgetSheet({
                             />
                           </View>
                         ) : (
-                          <View className="items-center justify-center rounded-full bg-white/10 p-2">
+                          <View className="items-center justify-center rounded-full bg-surface-secondary p-2">
                             <IconMuted name={ICON_MAP.grid} size={16} />
                           </View>
                         )}
 
                         <View className="flex-1 gap-0.5">
-                          <Text className="text-base font-semibold text-white">
+                          <Text className="text-base font-semibold text-foreground">
                             {group.appName}
                           </Text>
                           <Text className="text-sm text-muted-foreground">
@@ -382,7 +384,7 @@ const AddWidgetSheet = function AddWidgetSheet({
         )}
 
         {!hasResults && (
-          <View className="items-center justify-center gap-3 rounded-[28px] border border-white/8 px-6 py-10">
+          <View className="items-center justify-center gap-3 rounded-[28px] border border-border/40 px-6 py-10">
             <IconMuted name={ICON_MAP.search} size={22} />
             <Text className="text-base font-medium text-foreground">
               No matching widgets

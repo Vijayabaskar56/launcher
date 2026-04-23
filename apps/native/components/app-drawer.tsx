@@ -10,6 +10,7 @@ import {
   useState,
 } from "react";
 import {
+  Clipboard,
   Image,
   Modal,
   Platform,
@@ -438,6 +439,11 @@ export const AppDrawer = ({ boundary, offset, slideFrom }: AppDrawerProps) => {
   const handleSubmitSearch = useCallback(() => {
     const trimmedQuery = searchQuery.trim();
 
+    if (searchResults.calculatorResult) {
+      Clipboard.setString(searchResults.calculatorResult.copyValue);
+      return;
+    }
+
     // Try the first result from the highest-priority section
     const sections = sortedSections(searchResults.results);
     if (sections.length > 0) {
@@ -466,7 +472,14 @@ export const AppDrawer = ({ boundary, offset, slideFrom }: AppDrawerProps) => {
     }
 
     router.push(openClaw.getTopicChatPath(activeTopicId) as never);
-  }, [openClaw, router, search, searchQuery, searchResults.results]);
+  }, [
+    openClaw,
+    router,
+    search,
+    searchQuery,
+    searchResults.calculatorResult,
+    searchResults.results,
+  ]);
 
   if (search?.submitRef) {
     search.submitRef.current = handleSubmitSearch;
@@ -805,6 +818,7 @@ export const AppDrawer = ({ boundary, offset, slideFrom }: AppDrawerProps) => {
             <View className="flex-1" style={{ paddingTop: contentPaddingTop }}>
               <SearchResultsList
                 results={searchResults.results}
+                calculatorResult={searchResults.calculatorResult}
                 actions={searchResults.actions}
                 activeFilters={searchResults.activeFilters}
                 availableFilters={searchResults.availableFilters}
