@@ -1,9 +1,7 @@
-import { MaterialIcons } from "@expo/vector-icons";
-import { Button, Input, Label, TextField, useThemeColor } from "heroui-native";
+import { Ionicons } from "@expo/vector-icons";
+import { useThemeColor } from "heroui-native";
 import { useCallback } from "react";
-import { View } from "react-native";
-
-import { useThemeOverrides } from "@/context/theme-overrides";
+import { Pressable, TextInput, View } from "react-native";
 
 interface ChatComposerProps {
   disabled?: boolean;
@@ -22,17 +20,24 @@ export const ChatComposer = ({
   sending = false,
   value,
 }: ChatComposerProps) => {
-  const [border, foreground, muted, surface] = useThemeColor([
-    "border",
-    "foreground",
-    "muted",
-    "surface",
-  ] as const);
-  const { smallRadius } = useThemeOverrides();
+  const [accent, accentForeground, border, foreground, muted, surface] =
+    useThemeColor([
+      "accent",
+      "accent-foreground",
+      "border",
+      "foreground",
+      "muted",
+      "surface",
+    ] as const);
 
   const handleSubmit = useCallback(() => {
+    if (disabled || sending) {
+      return;
+    }
     onSubmit();
-  }, [onSubmit]);
+  }, [disabled, onSubmit, sending]);
+
+  const canSend = value.trim().length > 0 && !disabled && !sending;
 
   return (
     <View
@@ -40,49 +45,67 @@ export const ChatComposer = ({
         backgroundColor: surface,
         borderTopColor: border,
         borderTopWidth: 1,
-        gap: 12,
         paddingBottom: 16,
-        paddingHorizontal: 16,
-        paddingTop: 12,
+        paddingHorizontal: 12,
+        paddingTop: 10,
       }}
     >
-      <TextField isDisabled={disabled || sending}>
-        <View style={{ gap: 8 }}>
-          <Label>Message</Label>
-          <Input
-            multiline
-            numberOfLines={3}
-            onChangeText={onChangeText}
-            onSubmitEditing={handleSubmit}
-            placeholder={placeholder}
-            placeholderTextColor={muted}
-            style={{
-              backgroundColor: surface,
-              borderColor: border,
-              borderCurve: "continuous",
-              borderRadius: smallRadius,
-              borderWidth: 1,
-              color: foreground,
-              maxHeight: 140,
-              minHeight: 48,
-              paddingHorizontal: 14,
-              paddingVertical: 12,
-              textAlignVertical: "top",
-            }}
-            submitBehavior="submit"
-            value={value}
-          />
-        </View>
-      </TextField>
-
-      <Button
-        isDisabled={disabled || sending || value.trim().length === 0}
-        onPress={handleSubmit}
-        variant="primary"
+      <View
+        style={{
+          alignItems: "flex-end",
+          backgroundColor: surface,
+          borderColor: border,
+          borderCurve: "continuous",
+          borderRadius: 24,
+          borderWidth: 1,
+          flexDirection: "row",
+          gap: 6,
+          paddingLeft: 14,
+          paddingRight: 6,
+          paddingVertical: 6,
+        }}
       >
-        <MaterialIcons name="send" size={18} color="#ffffff" />
-        <Button.Label>{sending ? "Sending..." : "Send"}</Button.Label>
-      </Button>
+        <TextInput
+          editable={!(disabled || sending)}
+          multiline
+          onChangeText={onChangeText}
+          onSubmitEditing={handleSubmit}
+          placeholder={placeholder}
+          placeholderTextColor={muted}
+          style={{
+            color: foreground,
+            flex: 1,
+            fontSize: 15,
+            lineHeight: 20,
+            maxHeight: 140,
+            minHeight: 32,
+            paddingVertical: 6,
+            textAlignVertical: "center",
+          }}
+          submitBehavior="submit"
+          value={value}
+        />
+        <Pressable
+          accessibilityLabel={sending ? "Sending" : "Send message"}
+          disabled={!canSend}
+          onPress={handleSubmit}
+          style={({ pressed }) => ({
+            alignItems: "center",
+            backgroundColor: canSend ? accent : border,
+            borderRadius: 20,
+            height: 40,
+            justifyContent: "center",
+            opacity: pressed ? 0.75 : 1,
+            width: 40,
+          })}
+        >
+          <Ionicons
+            name={sending ? "hourglass-outline" : "arrow-up"}
+            size={20}
+            color={canSend ? accentForeground : muted}
+          />
+        </Pressable>
+      </View>
     </View>
   );
 };

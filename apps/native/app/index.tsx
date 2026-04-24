@@ -1,4 +1,5 @@
 import { openApplication } from "expo-intent-launcher";
+import { useRouter } from "expo-router";
 import { use, useCallback, useMemo, useState } from "react";
 import { Alert, useWindowDimensions, View } from "react-native";
 import { accessibilityActions } from "react-native-accessibility-actions";
@@ -18,6 +19,7 @@ import { scheduleOnRN } from "react-native-worklets";
 
 import { AppDrawer } from "@/components/app-drawer";
 import { ChargingGlow } from "@/components/charging-glow";
+import { ChatPanel } from "@/components/chat-panel";
 import { ClockDisplay } from "@/components/clock-display";
 import { DockRow } from "@/components/dock-row";
 import { SearchBar, useSearchBar } from "@/components/search-bar";
@@ -118,27 +120,33 @@ function DockArea({ baseBottom }: { baseBottom: number }) {
 }
 
 export default function Home() {
+  const router = useRouter();
   const { height: screenHeight, width: screenWidth } = useWindowDimensions();
   const insets = useSafeAreaInsets();
   const config = use(LauncherConfigContext);
   const settings = use(SettingsContext);
   const isTop = config?.state.searchBarPosition === "top";
 
-  // Directional panel state
   const drawerOffset = useSharedValue(screenHeight);
   const drawerSlideFrom = useSharedValue<SlideFrom>("bottom");
   const widgetOffset = useSharedValue(screenHeight);
   const widgetSlideFrom = useSharedValue<SlideFrom>("top");
+  const chatOffset = useSharedValue(screenWidth);
+  const chatSlideFrom = useSharedValue<SlideFrom>("right");
   const drawerIsAtTop = useSharedValue(true);
   const drawerIsAtBottom = useSharedValue(true);
   const widgetIsAtTop = useSharedValue(true);
   const widgetIsAtBottom = useSharedValue(true);
+  const chatIsAtTop = useSharedValue(true);
+  const chatIsAtBottom = useSharedValue(true);
 
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
   const [isWidgetPanelOpen, setIsWidgetPanelOpen] = useState(false);
+  const [isChatPanelOpen, setIsChatPanelOpen] = useState(false);
 
   // System bar control — homescreen only
-  const isHomescreenVisible = !isDrawerOpen && !isWidgetPanelOpen;
+  const isHomescreenVisible =
+    !isDrawerOpen && !isWidgetPanelOpen && !isChatPanelOpen;
   useSystemBars(
     settings?.state.homescreen ?? ({} as never),
     isHomescreenVisible
@@ -164,6 +172,15 @@ export default function Home() {
     }
   );
 
+  useAnimatedReaction(
+    () => chatOffset.value < 10,
+    (isOpen, wasOpen) => {
+      if (isOpen !== wasOpen) {
+        scheduleOnRN(setIsChatPanelOpen, isOpen);
+      }
+    }
+  );
+
   // Back button — animate panel back to origin edge
   useHardwareBackPress(() => {
     if (isDrawerOpen) {
@@ -184,20 +201,35 @@ export default function Home() {
       widgetOffset.value = withTiming(size, TIMING_CONFIG);
       return true;
     }
+    if (isChatPanelOpen) {
+      const size = getScreenSize(
+        chatSlideFrom.value,
+        screenWidth,
+        screenHeight
+      );
+      chatOffset.value = withTiming(size, TIMING_CONFIG);
+      return true;
+    }
     return false;
   }, [
     drawerOffset,
     drawerSlideFrom,
     widgetOffset,
     widgetSlideFrom,
+    chatOffset,
+    chatSlideFrom,
     isDrawerOpen,
     isWidgetPanelOpen,
+    isChatPanelOpen,
     screenHeight,
     screenWidth,
   ]);
 
-  // Search always opens drawer from bottom
+  // Skip when chat panel is active: the search bar becomes the chat composer.
   const handleSearchActivate = useCallback(() => {
+    if (chatOffset.value < 10) {
+      return;
+    }
     const widgetSize = getScreenSize(
       widgetSlideFrom.value,
       screenWidth,
@@ -211,6 +243,7 @@ export default function Home() {
       drawerOffset.value = withTiming(0, TIMING_CONFIG);
     });
   }, [
+    chatOffset,
     drawerOffset,
     drawerSlideFrom,
     widgetOffset,
@@ -238,6 +271,11 @@ export default function Home() {
     widgetOffset.value = withTiming(size, TIMING_CONFIG);
   }, [widgetOffset, widgetSlideFrom, screenWidth, screenHeight]);
 
+  const closeChatPanel = useCallback(() => {
+    const size = getScreenSize(chatSlideFrom.value, screenWidth, screenHeight);
+    chatOffset.value = withTiming(size, TIMING_CONFIG);
+  }, [chatOffset, chatSlideFrom, screenWidth, screenHeight]);
+
   // --- Gesture action context ---
   const actionContext = useMemo<GestureActionContext>(
     () => ({
@@ -261,8 +299,20 @@ export default function Home() {
           );
         }
       },
+      openChat: () => {
+        closeDrawer();
+        closeWidgetPanel();
+        const from = chatSlideFrom.value;
+        const size = getScreenSize(from, screenWidth, screenHeight);
+        cancelAnimation(chatOffset);
+        chatOffset.value = size;
+        requestAnimationFrame(() => {
+          chatOffset.value = withTiming(0, TIMING_CONFIG);
+        });
+      },
       openDrawer: (direction?: SwipeDirection) => {
         closeWidgetPanel();
+        closeChatPanel();
         const from = swipeToSlideFrom(direction);
         const size = getScreenSize(from, screenWidth, screenHeight);
         drawerSlideFrom.value = from;
@@ -343,8 +393,14 @@ export default function Home() {
       openSearch: () => {
         handleSearchActivate();
       },
+      openSettings: () => {
+        closeDrawer();
+        closeWidgetPanel();
+        router.push("/settings" as never);
+      },
       openWidgetPanel: (direction?: SwipeDirection) => {
         closeDrawer();
+        closeChatPanel();
         const from = swipeToSlideFrom(direction);
         const size = getScreenSize(from, screenWidth, screenHeight);
         widgetSlideFrom.value = from;
@@ -360,11 +416,15 @@ export default function Home() {
       drawerSlideFrom,
       widgetOffset,
       widgetSlideFrom,
+      chatOffset,
+      chatSlideFrom,
       screenHeight,
       screenWidth,
+      router,
       handleSearchActivate,
       closeDrawer,
       closeWidgetPanel,
+      closeChatPanel,
     ]
   );
 
@@ -373,10 +433,10 @@ export default function Home() {
     doubleTap: "lock-screen" as const,
     launchAppBindings: {},
     longPress: "none" as const,
-    swipeDown: "notifications" as const,
-    swipeLeft: "none" as const,
-    swipeRight: "none" as const,
-    swipeUp: "app-drawer" as const,
+    swipeDown: "app-drawer" as const,
+    swipeLeft: "settings" as const,
+    swipeRight: "chat" as const,
+    swipeUp: "widgets" as const,
   };
 
   const {
@@ -417,6 +477,11 @@ export default function Home() {
       screenWidth,
       screenHeight
     );
+    const chatSize = getScreenSize(
+      chatSlideFrom.value,
+      screenWidth,
+      screenHeight
+    );
     const drawerProgress = Math.max(
       0,
       Math.min(1, drawerOffset.value / drawerSize)
@@ -425,8 +490,9 @@ export default function Home() {
       0,
       Math.min(1, widgetOffset.value / widgetSize)
     );
+    const chatProgress = Math.max(0, Math.min(1, chatOffset.value / chatSize));
     return {
-      opacity: Math.min(drawerProgress, widgetProgress),
+      opacity: Math.min(drawerProgress, widgetProgress, chatProgress),
     };
   });
 
@@ -464,6 +530,11 @@ export default function Home() {
           boundary={{ isAtBottom: widgetIsAtBottom, isAtTop: widgetIsAtTop }}
           offset={widgetOffset}
           slideFrom={widgetSlideFrom}
+        />
+        <ChatPanel
+          boundary={{ isAtBottom: chatIsAtBottom, isAtTop: chatIsAtTop }}
+          offset={chatOffset}
+          slideFrom={chatSlideFrom}
         />
       </SearchBar.Provider>
       <ChargingGlow />

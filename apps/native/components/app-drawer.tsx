@@ -28,6 +28,7 @@ import Animated, {
 } from "react-native-reanimated";
 import type { SharedValue } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { scheduleOnRN } from "react-native-worklets";
 
 import { AppListContext } from "@/context/app-list";
 import {
@@ -41,7 +42,10 @@ import { LauncherConfigContext } from "@/context/launcher-config";
 import { useOpenClaw } from "@/context/openclaw";
 import { SettingsContext } from "@/context/settings";
 import { useDirectionalDismiss } from "@/hooks/use-directional-dismiss";
-import { useDirectionalPanel } from "@/hooks/use-directional-panel";
+import {
+  isHorizontal,
+  useDirectionalPanel,
+} from "@/hooks/use-directional-panel";
 import type { SlideFrom } from "@/hooks/use-directional-panel";
 import { useScrollDismissHandoff } from "@/hooks/use-scroll-dismiss-handoff";
 import { useSearch } from "@/hooks/use-search";
@@ -60,7 +64,9 @@ import type {
 } from "./app-drawer/types";
 import { AppIcon } from "./app-icon";
 import { useSearchBar } from "./search-bar";
-import { SearchResultsList } from "./search/search-results-list";
+import { CalculatorCard } from "./search/calculator-card";
+import { ExpandedContactCard } from "./search/expanded-contact-card";
+import { SearchFilterBar } from "./search/search-filter-bar";
 import { Icon, ICON_MAP } from "./ui/icon";
 import { IconButton } from "./ui/icon-button";
 
@@ -541,19 +547,24 @@ export const AppDrawer = ({ boundary, offset, slideFrom }: AppDrawerProps) => {
     [panelIsAtBottom, panelIsAtTop]
   );
 
+  const resetScrollPosition = useCallback(() => {
+    scrollRef.current?.scrollTo({ animated: false, y: 0 });
+    updateBoundaryFromScroll(0);
+    handleCloseActionMenu();
+    handleCloseEditor();
+  }, [handleCloseActionMenu, handleCloseEditor, updateBoundaryFromScroll]);
+
   useAnimatedReaction(
-    () => isSearching,
-    (searching) => {
-      if (searching) {
-        if (!panelIsAtTop.value) {
-          panelIsAtTop.value = true;
-        }
-        if (!panelIsAtBottom.value) {
-          panelIsAtBottom.value = true;
-        }
+    () => {
+      const size = isHorizontal(slideFrom.value) ? screenWidth : screenHeight;
+      return offset.value > size - 10;
+    },
+    (isClosed, wasClosed) => {
+      if (isClosed && !wasClosed) {
+        scheduleOnRN(resetScrollPosition);
       }
     },
-    [isSearching]
+    [resetScrollPosition, screenHeight, screenWidth]
   );
 
   const handleScroll = useCallback(
@@ -641,13 +652,50 @@ export const AppDrawer = ({ boundary, offset, slideFrom }: AppDrawerProps) => {
     });
   }, [appByPkg, drawerMetadata]);
 
-  const filteredPinnedApps = useMemo(
-    () =>
+  const matchingAppPackages = useMemo(() => {
+    if (!isSearching) {
+      return null;
+    }
+    const set = new Set<string>();
+    const appResults = searchResults.results.get("app") ?? [];
+    for (const result of appResults) {
+      const pkg = (result.data as { packageName?: string } | null)?.packageName;
+      if (pkg) {
+        set.add(pkg);
+      }
+    }
+    return set;
+  }, [isSearching, searchResults.results]);
+
+  const matchingContactResults = useMemo(() => {
+    if (!isSearching) {
+      return [];
+    }
+    return searchResults.results.get("contact") ?? [];
+  }, [isSearching, searchResults.results]);
+
+  const filteredPinnedApps = useMemo(() => {
+    const baseApps =
       effectiveActiveTagId === null
         ? pinnedApps
-        : pinnedApps.filter((app) => app.tagIds.includes(effectiveActiveTagId)),
-    [effectiveActiveTagId, pinnedApps]
-  );
+        : pinnedApps.filter((app) => app.tagIds.includes(effectiveActiveTagId));
+    if (matchingAppPackages) {
+      return baseApps.filter((app) => matchingAppPackages.has(app.packageName));
+    }
+    return baseApps;
+  }, [effectiveActiveTagId, pinnedApps, matchingAppPackages]);
+
+  const filteredLauncherApps = useMemo(() => {
+    if (!matchingAppPackages) {
+      return sortedApps;
+    }
+    const pinnedSet = new Set(filteredPinnedApps.map((app) => app.packageName));
+    return sortedApps.filter(
+      (app) =>
+        matchingAppPackages.has(app.packageName) &&
+        !pinnedSet.has(app.packageName)
+    );
+  }, [sortedApps, matchingAppPackages, filteredPinnedApps]);
 
   const actionApp = actionMenu ? appByPkg[actionMenu.packageName] : null;
   const editorApp = editorAppId ? appByPkg[editorAppId] : null;
@@ -814,43 +862,27 @@ export const AppDrawer = ({ boundary, offset, slideFrom }: AppDrawerProps) => {
           className="absolute bottom-0 left-0 right-0 top-0 bg-background/80"
           style={[animatedStyle]}
         >
-          {isSearching ? (
-            <View className="flex-1" style={{ paddingTop: contentPaddingTop }}>
-              <SearchResultsList
-                results={searchResults.results}
-                calculatorResult={searchResults.calculatorResult}
-                actions={searchResults.actions}
-                activeFilters={searchResults.activeFilters}
-                availableFilters={searchResults.availableFilters}
-                onToggleFilter={searchResults.handleToggleFilter}
-                allowNetwork={searchResults.allowNetwork}
-                onToggleNetwork={searchResults.handleToggleNetwork}
-                filterBarEnabled={
-                  settings?.state.search.filterBarEnabled ?? true
-                }
-              />
-            </View>
-          ) : (
-            <ScrollView
-              ref={scrollRef}
-              className="flex-1"
-              contentContainerStyle={{
-                gap: 32,
-                paddingBottom: contentPaddingBottom,
-                paddingHorizontal: 16,
-                paddingTop: contentPaddingTop,
-              }}
-              keyboardShouldPersistTaps="handled"
-              onContentSizeChange={handleContentSizeChange}
-              onGestureUpdate_CAN_CAUSE_INFINITE_RERENDER={
-                handleScrollGestureUpdate
-              }
-              onLayout={handleScrollLayout}
-              onScroll={handleScroll}
-              removeClippedSubviews
-              scrollEventThrottle={16}
-              showsVerticalScrollIndicator={false}
-            >
+          <ScrollView
+            ref={scrollRef}
+            className="flex-1"
+            contentContainerStyle={{
+              gap: 16,
+              paddingBottom: contentPaddingBottom,
+              paddingHorizontal: 16,
+              paddingTop: contentPaddingTop,
+            }}
+            keyboardShouldPersistTaps="handled"
+            onContentSizeChange={handleContentSizeChange}
+            onGestureUpdate_CAN_CAUSE_INFINITE_RERENDER={
+              handleScrollGestureUpdate
+            }
+            onLayout={handleScrollLayout}
+            onScroll={handleScroll}
+            removeClippedSubviews
+            scrollEventThrottle={16}
+            showsVerticalScrollIndicator={false}
+          >
+            {(!isSearching || filteredPinnedApps.length > 0) && (
               <PinnedSection
                 activeTagId={effectiveActiveTagId}
                 apps={filteredPinnedApps}
@@ -862,14 +894,30 @@ export const AppDrawer = ({ boundary, offset, slideFrom }: AppDrawerProps) => {
                 onAppPress={handleAppPress}
                 onEditPress={handleOpenFavoritesEdit}
                 onTagPress={setActiveTagId}
-                tags={orderedTags}
+                tags={isSearching ? [] : orderedTags}
                 iconRefs={iconRefs}
               />
+            )}
 
+            {isSearching && searchResults.calculatorResult ? (
+              <CalculatorCard result={searchResults.calculatorResult} />
+            ) : null}
+
+            {isSearching && matchingContactResults.length > 0 ? (
+              <View className="gap-3">
+                {matchingContactResults.map((contact) => (
+                  <ExpandedContactCard key={contact.id} result={contact} />
+                ))}
+              </View>
+            ) : null}
+
+            {(!isSearching || filteredLauncherApps.length > 0) && (
               <LauncherSection
-                apps={sortedApps}
+                apps={isSearching ? filteredLauncherApps : sortedApps}
                 columns={columns}
-                emptyTitle="No apps available"
+                emptyTitle={
+                  isSearching ? "No matching apps" : "No apps available"
+                }
                 iconSize={iconSize}
                 iconShape={iconShape}
                 showLabels={showLabels}
@@ -877,22 +925,45 @@ export const AppDrawer = ({ boundary, offset, slideFrom }: AppDrawerProps) => {
                 onAppPress={handleAppPress}
                 iconRefs={iconRefs}
               />
+            )}
 
-              {hiddenApps.length > 0 ? (
-                <Pressable
-                  onPress={handleOpenHidden}
-                  className="flex-row items-center bg-secondary border border-border rounded-2xl gap-2 px-4 py-3 min-h-[48px] justify-center"
-                >
-                  <Icon name={ICON_MAP.eyeOff} size={18} />
-                  <Text className="text-base font-bold text-foreground">
-                    Show Hidden Apps ({hiddenApps.length})
-                  </Text>
-                </Pressable>
-              ) : null}
-            </ScrollView>
-          )}
+            {!isSearching && hiddenApps.length > 0 ? (
+              <Pressable
+                onPress={handleOpenHidden}
+                className="flex-row items-center bg-secondary border border-border rounded-2xl gap-2 px-4 py-3 min-h-[48px] justify-center"
+              >
+                <Icon name={ICON_MAP.eyeOff} size={18} />
+                <Text className="text-base font-bold text-foreground">
+                  Show Hidden Apps ({hiddenApps.length})
+                </Text>
+              </Pressable>
+            ) : null}
+
+            {isSearching &&
+            filteredPinnedApps.length === 0 &&
+            filteredLauncherApps.length === 0 &&
+            matchingContactResults.length === 0 &&
+            !searchResults.calculatorResult ? (
+              <View className="items-center pt-16">
+                <Text className="text-base text-muted-foreground">
+                  No results found
+                </Text>
+              </View>
+            ) : null}
+          </ScrollView>
         </Animated.View>
       </GestureDetector>
+
+      {isSearching && (settings?.state.search.filterBarEnabled ?? true) ? (
+        <SearchFilterBar
+          activeFilters={searchResults.activeFilters}
+          availableFilters={searchResults.availableFilters}
+          onToggleFilter={searchResults.handleToggleFilter}
+          allowNetwork={searchResults.allowNetwork}
+          onToggleNetwork={searchResults.handleToggleNetwork}
+          actions={searchResults.actions}
+        />
+      ) : null}
 
       <AppDrawerActionMenu
         ref={actionMenuRef}

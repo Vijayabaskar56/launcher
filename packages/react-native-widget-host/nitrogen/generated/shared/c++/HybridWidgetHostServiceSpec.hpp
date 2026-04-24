@@ -18,8 +18,8 @@ namespace margelo::nitro::widgethost { struct WidgetProviderInfo; }
 
 #include "WidgetProviderInfo.hpp"
 #include <vector>
-#include <NitroModules/Promise.hpp>
 #include <string>
+#include <NitroModules/Promise.hpp>
 
 namespace margelo::nitro::widgethost {
 
@@ -53,6 +53,7 @@ namespace margelo::nitro::widgethost {
     public:
       // Methods
       virtual std::vector<WidgetProviderInfo> getInstalledWidgetProviders() = 0;
+      virtual std::shared_ptr<Promise<std::string>> loadPreviewImage(const std::string& provider) = 0;
       virtual std::shared_ptr<Promise<double>> allocateAndBindWidget(const std::string& provider) = 0;
       virtual void deleteWidget(double widgetId) = 0;
 

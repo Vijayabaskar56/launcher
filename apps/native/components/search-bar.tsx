@@ -37,6 +37,7 @@ interface SearchBarContextValue {
     searchText: string;
     inputHeight: number;
     hidden: boolean;
+    placeholder: string;
   };
   actions: {
     activate: () => void;
@@ -44,6 +45,7 @@ interface SearchBarContextValue {
     setSearchText: (text: string) => void;
     setInputHeight: (height: number) => void;
     setHidden: (hidden: boolean) => void;
+    setPlaceholder: (placeholder: string | null) => void;
   };
   filterToggleRef: React.MutableRefObject<
     ((filter: SearchFilter) => void) | null
@@ -82,6 +84,11 @@ const SearchBarProvider = ({
   const [searchText, setSearchText] = useState("");
   const [inputHeight, setInputHeight] = useState(0);
   const [hidden, setHidden] = useState(false);
+  const [placeholder, setPlaceholderState] = useState("Search");
+
+  const setPlaceholder = useCallback((next: string | null) => {
+    setPlaceholderState(next ?? "Search");
+  }, []);
   const enrichedRef = useRef<EnrichedTextInputInstance>(null);
   const filterToggleRef = useRef<((filter: SearchFilter) => void) | null>(null);
   const submitRef = useRef<(() => void) | null>(null);
@@ -107,6 +114,7 @@ const SearchBarProvider = ({
         deactivate,
         setHidden,
         setInputHeight,
+        setPlaceholder,
         setSearchText,
       },
       enriched: {
@@ -119,7 +127,7 @@ const SearchBarProvider = ({
       },
       filterToggleRef,
       meta: { enrichedRef },
-      state: { hidden, inputHeight, isActive, searchText },
+      state: { hidden, inputHeight, isActive, placeholder, searchText },
       submitRef,
     }),
     [
@@ -128,7 +136,9 @@ const SearchBarProvider = ({
       hidden,
       inputHeight,
       isActive,
+      placeholder,
       searchText,
+      setPlaceholder,
       enrichedSearch,
     ]
   );
@@ -278,7 +288,7 @@ const SearchBarInput = () => {
         autoCapitalize="none"
         scrollEnabled={isAtMax}
         mentionIndicators={["@", "#", ":", "/"]}
-        placeholder="Search"
+        placeholder={ctx.state.placeholder}
         placeholderTextColor={muted as string}
         cursorColor={accent as string}
         selectionColor={accent as string}

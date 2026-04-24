@@ -142,6 +142,8 @@ export interface SearchSettings {
 export type GestureAction =
   | "none"
   | "search"
+  | "settings"
+  | "chat"
   | "notifications"
   | "quick-settings"
   | "app-drawer"
@@ -251,10 +253,10 @@ export const DEFAULT_SETTINGS: LauncherSettingsData = {
     doubleTap: "lock-screen",
     launchAppBindings: {},
     longPress: "none",
-    swipeDown: "notifications",
-    swipeLeft: "none",
-    swipeRight: "none",
-    swipeUp: "app-drawer",
+    swipeDown: "app-drawer",
+    swipeLeft: "settings",
+    swipeRight: "chat",
+    swipeUp: "widgets",
   },
   homescreen: {
     batteryIndicator: "charging-or-low",

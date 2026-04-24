@@ -91,6 +91,7 @@ const RootLayout = () => {
                         <Stack.Screen
                           name="settings"
                           options={{
+                            animation: "slide_from_left",
                             headerShown: false,
                             presentation: "card",
                           }}
@@ -98,6 +99,7 @@ const RootLayout = () => {
                         <Stack.Screen
                           name="openclaw"
                           options={{
+                            animation: "slide_from_right",
                             headerShown: false,
                             presentation: "card",
                           }}

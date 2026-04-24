@@ -9,11 +9,16 @@ import android.appwidget.AppWidgetProviderInfo
 import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
+import android.graphics.Bitmap
+import android.graphics.Canvas
+import android.graphics.drawable.Drawable
 import android.os.Build
 import android.os.Bundle
+import android.util.Base64
 import com.facebook.react.bridge.ActivityEventListener
 import com.facebook.react.bridge.ReactApplicationContext
 import com.margelo.nitro.core.Promise
+import java.io.ByteArrayOutputStream
 
 /**
  * Singleton manager for AppWidgetHost lifecycle, widget allocation,
@@ -197,6 +202,23 @@ class AppWidgetHostManager private constructor(context: Context) {
         return promise
     }
 
+    fun loadPreviewImage(provider: String): Promise<String> {
+        val providerInfo = widgetManager.installedProviders.firstOrNull {
+            it.provider.flattenToString() == provider
+        } ?: return Promise.resolved("")
+
+        return try {
+            val preview = providerInfo.loadPreviewImage(
+                appContext,
+                appContext.resources.displayMetrics.densityDpi
+            ) ?: return Promise.resolved("")
+
+            Promise.resolved(drawableToDataUri(preview))
+        } catch (_: Exception) {
+            Promise.resolved("")
+        }
+    }
+
     fun deleteWidget(widgetId: Int) {
         try {
             widgetHost.deleteAppWidgetId(widgetId)
@@ -205,11 +227,16 @@ class AppWidgetHostManager private constructor(context: Context) {
         }
     }
 
-    fun createView(context: Context, widgetId: Int): TrackedAppWidgetHostView {
+    fun createView(@Suppress("UNUSED_PARAMETER") context: Context, widgetId: Int): TrackedAppWidgetHostView {
         startListeningSafely()
         val providerInfo = widgetManager.getAppWidgetInfo(widgetId)
             ?: throw Error("No AppWidgetProviderInfo found for widgetId=$widgetId")
-        val view = widgetHost.createView(context, widgetId, providerInfo) as TrackedAppWidgetHostView
+
+        // Match launcher hosts like Kvaesitso and avoid inflating RemoteViews through
+        // the current activity's AppCompat/Fabric context. Some providers crash or render
+        // their error view when the host inflater upgrades framework widgets to AppCompat
+        // classes that RemoteViews cannot drive.
+        val view = widgetHost.createView(appContext, widgetId, providerInfo) as TrackedAppWidgetHostView
         view.setAppWidget(widgetId, providerInfo)
         return view
     }
@@ -288,6 +315,29 @@ class AppWidgetHostManager private constructor(context: Context) {
         } catch (_: Exception) {
             // Safe to ignore
         }
+    }
+
+    private fun drawableToDataUri(drawable: Drawable): String {
+        val maxPreviewEdge = 1024
+        val fallbackPreviewEdge = 512
+        val width = drawable.intrinsicWidth
+            .takeIf { it > 0 }
+            ?.coerceAtMost(maxPreviewEdge)
+            ?: fallbackPreviewEdge
+        val height = drawable.intrinsicHeight
+            .takeIf { it > 0 }
+            ?.coerceAtMost(maxPreviewEdge)
+            ?: fallbackPreviewEdge
+
+        val bitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
+        val canvas = Canvas(bitmap)
+        drawable.setBounds(0, 0, canvas.width, canvas.height)
+        drawable.draw(canvas)
+
+        val output = ByteArrayOutputStream()
+        bitmap.compress(Bitmap.CompressFormat.PNG, 100, output)
+        val encoded = Base64.encodeToString(output.toByteArray(), Base64.NO_WRAP)
+        return "data:image/png;base64,$encoded"
     }
 
     /** Custom AppWidgetHost that creates TrackedAppWidgetHostView instances */

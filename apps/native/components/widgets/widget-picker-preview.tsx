@@ -1,6 +1,6 @@
 import { Card } from "heroui-native";
 import { memo, useCallback, useMemo } from "react";
-import { Pressable, Text, View } from "react-native";
+import { Image, Pressable, Text, View } from "react-native";
 import type { DimensionValue } from "react-native";
 
 import { AppIcon } from "@/components/app-icon";
@@ -310,6 +310,7 @@ const NativeWidgetPreviewCard = memo(function NativeWidgetPreviewCard({
   minHeight,
   minWidth,
   onPress,
+  previewImageUri,
 }: {
   app?: AppPreviewInfo;
   isBusy?: boolean;
@@ -317,11 +318,24 @@ const NativeWidgetPreviewCard = memo(function NativeWidgetPreviewCard({
   minHeight: number;
   minWidth: number;
   onPress: () => void;
+  previewImageUri?: string | null;
 }) {
   const isWide = minWidth >= minHeight * 1.6;
   const isTall = minHeight >= minWidth * 1.2;
   const appName = app?.appName ?? "App widget";
   const previewBody = useMemo(() => {
+    if (previewImageUri) {
+      return (
+        <View className="flex-1 items-center justify-center rounded-[20px] bg-surface-secondary p-3">
+          <Image
+            resizeMode="contain"
+            source={{ uri: previewImageUri }}
+            style={{ height: "100%", width: "100%" }}
+          />
+        </View>
+      );
+    }
+
     if (isWide) {
       return (
         <View className="gap-3">
@@ -348,7 +362,7 @@ const NativeWidgetPreviewCard = memo(function NativeWidgetPreviewCard({
         <View className="h-12 rounded-[20px] bg-surface-secondary" />
       </View>
     );
-  }, [isTall, isWide]);
+  }, [isTall, isWide, previewImageUri]);
 
   return (
     <PreviewShell

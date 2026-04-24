@@ -23,6 +23,10 @@ class HybridWidgetHostService : HybridWidgetHostServiceSpec() {
         return manager.getInstalledWidgetProviders()
     }
 
+    override fun loadPreviewImage(provider: String): Promise<String> {
+        return manager.loadPreviewImage(provider)
+    }
+
     override fun allocateAndBindWidget(provider: String): Promise<Double> {
         val reactContext = NitroModules.applicationContext as? ReactApplicationContext
             ?: return Promise.resolved((-1).toDouble())

@@ -22,6 +22,7 @@ export interface WidgetHostService extends HybridObject<{
   android: "kotlin";
 }> {
   getInstalledWidgetProviders(): WidgetProviderInfo[];
+  loadPreviewImage(provider: string): Promise<string>;
   allocateAndBindWidget(provider: string): Promise<number>;
   deleteWidget(widgetId: number): void;
 }

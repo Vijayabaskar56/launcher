@@ -14,6 +14,7 @@ public protocol HybridWidgetHostServiceSpec_protocol: HybridObject {
 
   // Methods
   func getInstalledWidgetProviders() throws -> [WidgetProviderInfo]
+  func loadPreviewImage(provider: String) throws -> Promise<String>
   func allocateAndBindWidget(provider: String) throws -> Promise<Double>
   func deleteWidget(widgetId: Double) throws -> Void
 }

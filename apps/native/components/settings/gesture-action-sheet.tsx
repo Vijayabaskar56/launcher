@@ -2,7 +2,8 @@ import { MaterialIcons } from "@expo/vector-icons";
 import { TrueSheet } from "@lodev09/react-native-true-sheet";
 import { useThemeColor } from "heroui-native";
 import { forwardRef, useCallback, useImperativeHandle, useRef } from "react";
-import { Pressable, ScrollView, Text, View } from "react-native";
+import { Alert, Pressable, ScrollView, Text, View } from "react-native";
+import { accessibilityActions } from "react-native-accessibility-actions";
 
 import { useThemeOverrides } from "@/context/theme-overrides";
 import {
@@ -14,6 +15,7 @@ import type { GestureAction } from "@/types/settings";
 const ACTION_ICONS: Record<GestureAction, keyof typeof MaterialIcons.glyphMap> =
   {
     "app-drawer": "apps",
+    chat: "forum",
     "launch-app": "launch",
     "lock-screen": "lock",
     none: "block",
@@ -22,6 +24,7 @@ const ACTION_ICONS: Record<GestureAction, keyof typeof MaterialIcons.glyphMap> =
     "quick-settings": "settings-suggest",
     recents: "history",
     search: "search",
+    settings: "settings",
     widgets: "widgets",
   };
 
@@ -32,7 +35,7 @@ interface ActionGroup {
 
 const ACTION_GROUPS: ActionGroup[] = [
   {
-    actions: ["search", "app-drawer", "widgets"],
+    actions: ["search", "app-drawer", "widgets", "settings", "chat"],
     label: "Launcher pages",
   },
   {
@@ -72,9 +75,11 @@ export const GestureActionSheet = Object.assign(
     ) => {
       const sheetRef = useRef<TrueSheet>(null);
       const { fontFamily } = useThemeOverrides();
-      const [foreground, muted] = useThemeColor([
+      const [foreground, muted, accent, overlay] = useThemeColor([
         "foreground",
         "muted",
+        "accent",
+        "overlay",
       ] as const);
 
       useImperativeHandle(ref, () => ({
@@ -84,6 +89,22 @@ export const GestureActionSheet = Object.assign(
 
       const handleSelect = useCallback(
         (action: GestureAction) => {
+          const permission = getActionPermission(action);
+          if (permission && !permission.checkAvailable()) {
+            Alert.alert(
+              "Permission required",
+              `${permission.description}. Enable it in system settings, then return here to set this gesture.`,
+              [
+                { style: "cancel", text: "Cancel" },
+                {
+                  onPress: () =>
+                    accessibilityActions.openAccessibilitySettings(),
+                  text: "Open Settings",
+                },
+              ]
+            );
+            return;
+          }
           if (action === "launch-app") {
             onSelectLaunchApp();
             return;
@@ -163,6 +184,7 @@ export const GestureActionSheet = Object.assign(
           grabber
           dimmed
           scrollable
+          backgroundColor={overlay}
           onDidDismiss={onClose}
         >
           <ScrollView

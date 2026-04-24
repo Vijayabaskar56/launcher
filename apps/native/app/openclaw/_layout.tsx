@@ -21,7 +21,7 @@ const OpenClawLayout = () => {
         },
       }}
     >
-      <Stack.Screen name="chat/[topicId]" options={{ title: "Topic Chat" }} />
+      <Stack.Screen name="chat/[topicId]" options={{ headerShown: false }} />
     </Stack>
   );
 };

@@ -14,6 +14,24 @@ import {
   NativeWidgetPreviewCard,
 } from "./widget-picker-preview";
 
+interface WidgetHostService {
+  getInstalledWidgetProviders: () => NativeProvider[];
+  loadPreviewImage: (provider: string) => Promise<string | null>;
+}
+
+const widgetHostService: WidgetHostService | null = (() => {
+  if (Platform.OS !== "android") {
+    return null;
+  }
+  try {
+    // eslint-disable-next-line unicorn/prefer-module, node/global-require -- conditional native module loading
+    return require("react-native-widget-host")
+      .widgetHostService as WidgetHostService;
+  } catch {
+    return null;
+  }
+})();
+
 interface NativeProvider {
   label: string;
   minHeight: number;
@@ -27,6 +45,9 @@ interface NativeProviderGroup {
   packageName: string;
   providers: NativeProvider[];
 }
+
+let cachedNativeProviders: NativeProvider[] | null = null;
+const nativePreviewCache = new Map<string, string>();
 
 const BuiltinWidgetPreviewItem = ({
   onAdd,
@@ -66,6 +87,44 @@ const NativeWidgetPreviewItem = ({
   onAdd: (provider: string, label: string) => Promise<void> | void;
   provider: NativeProvider;
 }) => {
+  const [previewImageUri, setPreviewImageUri] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!widgetHostService) {
+      return;
+    }
+
+    const cachedPreview = nativePreviewCache.get(provider.provider);
+    if (cachedPreview) {
+      setPreviewImageUri(cachedPreview);
+      return;
+    }
+
+    let cancelled = false;
+
+    const loadPreview = async () => {
+      try {
+        const preview = await widgetHostService.loadPreviewImage(
+          provider.provider
+        );
+        if (!cancelled && preview) {
+          nativePreviewCache.set(provider.provider, preview);
+          setPreviewImageUri(preview);
+        }
+      } catch {
+        if (!cancelled) {
+          setPreviewImageUri(null);
+        }
+      }
+    };
+
+    loadPreview();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [provider.provider]);
+
   const handlePress = useCallback(() => {
     onAdd(provider.provider, provider.label);
   }, [onAdd, provider.label, provider.provider]);
@@ -78,11 +137,10 @@ const NativeWidgetPreviewItem = ({
       minHeight={provider.minHeight}
       minWidth={provider.minWidth}
       onPress={handlePress}
+      previewImageUri={previewImageUri}
     />
   );
 };
-
-let cachedNativeProviders: NativeProvider[] | null = null;
 
 interface AddWidgetSheetProps {
   activeWidgetIds: WidgetId[];
@@ -108,7 +166,7 @@ const AddWidgetSheet = function AddWidgetSheet({
   const [searchQuery, setSearchQuery] = useState("");
 
   useEffect(() => {
-    if (Platform.OS !== "android") {
+    if (!widgetHostService) {
       return;
     }
 
@@ -118,8 +176,6 @@ const AddWidgetSheet = function AddWidgetSheet({
     }
 
     try {
-      // eslint-disable-next-line unicorn/prefer-module, node/global-require -- conditional native module loading
-      const { widgetHostService } = require("react-native-widget-host");
       const providers = widgetHostService.getInstalledWidgetProviders();
       cachedNativeProviders = providers;
       setNativeProviders(providers);

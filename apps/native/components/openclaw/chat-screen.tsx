@@ -1,8 +1,9 @@
 import { useRouter } from "expo-router";
-import { Button } from "heroui-native";
+import { Button, useThemeColor } from "heroui-native";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { KeyboardAvoidingView, Platform, Text, View } from "react-native";
 import { openClawGateway } from "react-native-openclaw-gateway";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { ChatComposer } from "@/components/openclaw/chat-composer";
 import { ChatMessageList } from "@/components/openclaw/chat-message-list";
@@ -185,6 +186,9 @@ export const ChatScreen = ({ topicId }: ChatScreenProps) => {
     topic,
   } = useChatScreenLogic(topicId);
 
+  const [foreground, muted] = useThemeColor(["foreground", "muted"] as const);
+  const insets = useSafeAreaInsets();
+
   const handleSubmitComposer = useCallback(async () => {
     await sendMessage(composerText);
   }, [composerText, sendMessage]);
@@ -201,7 +205,7 @@ export const ChatScreen = ({ topicId }: ChatScreenProps) => {
         <Text
           selectable
           style={{
-            color: "rgba(255,255,255,0.72)",
+            color: muted,
             fontSize: 14,
             lineHeight: 20,
             textAlign: "center",
@@ -226,7 +230,7 @@ export const ChatScreen = ({ topicId }: ChatScreenProps) => {
         <Text
           selectable
           style={{
-            color: "#ffffff",
+            color: foreground,
             fontSize: 20,
             fontWeight: "700",
             textAlign: "center",
@@ -237,7 +241,7 @@ export const ChatScreen = ({ topicId }: ChatScreenProps) => {
         <Text
           selectable
           style={{
-            color: "rgba(255,255,255,0.72)",
+            color: muted,
             fontSize: 14,
             lineHeight: 20,
             textAlign: "center",
@@ -257,7 +261,7 @@ export const ChatScreen = ({ topicId }: ChatScreenProps) => {
       behavior={Platform.OS === "ios" ? "padding" : undefined}
       style={{ flex: 1 }}
     >
-      <View style={{ flex: 1 }}>
+      <View style={{ flex: 1, paddingTop: insets.top }}>
         <ChatMessageList
           errorText={errorText}
           isLoading={isLoading}

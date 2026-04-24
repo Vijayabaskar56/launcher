@@ -55,6 +55,7 @@ namespace margelo::nitro::widgethost {
   public:
     // Methods
     std::vector<WidgetProviderInfo> getInstalledWidgetProviders() override;
+    std::shared_ptr<Promise<std::string>> loadPreviewImage(const std::string& provider) override;
     std::shared_ptr<Promise<double>> allocateAndBindWidget(const std::string& provider) override;
     void deleteWidget(double widgetId) override;
 

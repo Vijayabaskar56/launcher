@@ -78,6 +78,14 @@ namespace margelo::nitro::widgethost {
       auto __value = std::move(__result.value());
       return __value;
     }
+    inline std::shared_ptr<Promise<std::string>> loadPreviewImage(const std::string& provider) override {
+      auto __result = _swiftPart.loadPreviewImage(provider);
+      if (__result.hasError()) [[unlikely]] {
+        std::rethrow_exception(__result.error());
+      }
+      auto __value = std::move(__result.value());
+      return __value;
+    }
     inline std::shared_ptr<Promise<double>> allocateAndBindWidget(const std::string& provider) override {
       auto __result = _swiftPart.allocateAndBindWidget(provider);
       if (__result.hasError()) [[unlikely]] {

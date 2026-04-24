@@ -15,6 +15,7 @@ namespace margelo::nitro::widgethost {
     // load custom methods/properties
     registerHybrids(this, [](Prototype& prototype) {
       prototype.registerHybridMethod("getInstalledWidgetProviders", &HybridWidgetHostServiceSpec::getInstalledWidgetProviders);
+      prototype.registerHybridMethod("loadPreviewImage", &HybridWidgetHostServiceSpec::loadPreviewImage);
       prototype.registerHybridMethod("allocateAndBindWidget", &HybridWidgetHostServiceSpec::allocateAndBindWidget);
       prototype.registerHybridMethod("deleteWidget", &HybridWidgetHostServiceSpec::deleteWidget);
     });

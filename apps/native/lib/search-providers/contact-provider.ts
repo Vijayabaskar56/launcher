@@ -44,15 +44,29 @@ const searchContacts = async (
   });
 
   return data.map((contact): SearchResult => {
-    const phoneNumbers = [...new Map((contact.phoneNumbers ?? []).map((p) => [p.number, {
-	label: p.label ?? 'Phone',
-	number: p.number ?? ''
-}])).values()];
+    const phoneNumbers = [
+      ...new Map(
+        (contact.phoneNumbers ?? []).map((p) => [
+          p.number,
+          {
+            label: p.label ?? "Phone",
+            number: p.number ?? "",
+          },
+        ])
+      ).values(),
+    ];
 
-    const emails = [...new Map((contact.emails ?? []).map((e) => [e.email, {
-	email: e.email ?? '',
-	label: e.label ?? 'Email'
-}])).values()];
+    const emails = [
+      ...new Map(
+        (contact.emails ?? []).map((e) => [
+          e.email,
+          {
+            email: e.email ?? "",
+            label: e.label ?? "Email",
+          },
+        ])
+      ).values(),
+    ];
 
     const firstPhone = phoneNumbers[0]?.number;
     const firstEmail = emails[0]?.email;

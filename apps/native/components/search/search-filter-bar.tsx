@@ -4,7 +4,7 @@ import { memo, useCallback } from "react";
 import { Pressable, ScrollView, View } from "react-native";
 
 import { useKeyboardHeight } from "@/hooks/use-keyboard-height";
-import type { SearchFilter } from "@/types/search";
+import type { SearchActionMatch, SearchFilter } from "@/types/search";
 
 type IoniconName = keyof typeof Ionicons.glyphMap;
 
@@ -89,18 +89,50 @@ const FilterPillWithToggle = ({
   );
 };
 
+const ActionChip = ({ action }: { action: SearchActionMatch }) => {
+  const accent = useThemeColor("accent");
+  const foreground = useThemeColor("foreground");
+  const muted = useThemeColor("muted");
+  const handlePress = action.onPress;
+
+  return (
+    <Chip
+      onPress={handlePress}
+      variant="secondary"
+      color="default"
+      style={{
+        backgroundColor: "transparent",
+        borderColor: muted,
+        borderWidth: 1,
+        paddingHorizontal: 12,
+        paddingVertical: 6,
+      }}
+    >
+      <Ionicons name={action.icon as IoniconName} size={14} color={accent} />
+      <Chip.Label
+        numberOfLines={1}
+        style={{ color: foreground, fontSize: 13, fontWeight: "500" }}
+      >
+        {action.label}
+      </Chip.Label>
+    </Chip>
+  );
+};
+
 export const SearchFilterBar = memo(function SearchFilterBar({
   activeFilters,
   availableFilters,
   onToggleFilter,
   allowNetwork,
   onToggleNetwork,
+  actions = [],
 }: {
   activeFilters: Set<SearchFilter>;
   availableFilters: Set<SearchFilter>;
   onToggleFilter: (filter: SearchFilter) => void;
   allowNetwork: boolean;
   onToggleNetwork: () => void;
+  actions?: SearchActionMatch[];
 }) {
   const accent = useThemeColor("accent");
   const foreground = useThemeColor("foreground");
@@ -158,6 +190,10 @@ export const SearchFilterBar = memo(function SearchFilterBar({
             color={allowNetwork ? "#fff" : foreground}
           />
         </Pressable>
+
+        {actions.map((action) => (
+          <ActionChip key={`${action.type}-${action.label}`} action={action} />
+        ))}
 
         {/* Category filters */}
         {visibleFilters.map((f) => (

@@ -35,6 +35,10 @@ abstract class HybridWidgetHostServiceSpec: HybridObject() {
   
   @DoNotStrip
   @Keep
+  abstract fun loadPreviewImage(provider: String): Promise<String>
+  
+  @DoNotStrip
+  @Keep
   abstract fun allocateAndBindWidget(provider: String): Promise<Double>
   
   @DoNotStrip

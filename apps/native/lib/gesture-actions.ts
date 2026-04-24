@@ -7,6 +7,8 @@ export interface GestureActionContext {
   openDrawer: (direction?: SwipeDirection) => void;
   openWidgetPanel: (direction?: SwipeDirection) => void;
   openSearch: () => void;
+  openSettings: () => void;
+  openChat: () => void;
   openNotifications: () => void;
   openQuickSettings: () => void;
   openRecents: () => void;
@@ -40,6 +42,14 @@ export function executeGestureAction(
     ctx.openSearch();
     return;
   }
+  if (action === "settings") {
+    ctx.openSettings();
+    return;
+  }
+  if (action === "chat") {
+    ctx.openChat();
+    return;
+  }
   if (action === "notifications") {
     ctx.openNotifications();
     return;
@@ -69,7 +79,7 @@ export interface ActionPermission {
 }
 
 const accessibilityPermission: ActionPermission = {
-  checkAvailable: accessibilityActions.isAccessibilityEnabled,
+  checkAvailable: () => accessibilityActions.isAccessibilityEnabled,
   description: "Requires Accessibility service",
 };
 
@@ -91,6 +101,7 @@ export function getActionPermission(
 
 export const GESTURE_ACTION_LABELS: Record<GestureAction, string> = {
   "app-drawer": "App Drawer",
+  chat: "Open Chat",
   "launch-app": "Launch App",
   "lock-screen": "Lock Screen",
   none: "Do nothing",
@@ -99,5 +110,6 @@ export const GESTURE_ACTION_LABELS: Record<GestureAction, string> = {
   "quick-settings": "Quick Settings",
   recents: "Recent Apps",
   search: "Open Search",
+  settings: "Open Settings",
   widgets: "Widgets",
 };

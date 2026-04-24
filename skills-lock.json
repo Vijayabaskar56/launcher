@@ -6,6 +6,11 @@
       "sourceType": "github",
       "computedHash": "651e79454a6cc234ff9f31943aadc1e25e0cec41a6ae26a6429b93a7800d1e5d"
     },
+    "build-nitro-modules": {
+      "source": "riteshshukla04/agent-skills",
+      "sourceType": "github",
+      "computedHash": "9053f700968a7d22f9b0121b620ac650ae5579a5513d2c896816b6771873ddf6"
+    },
     "building-components": {
       "source": "vercel/components.build",
       "sourceType": "github",
